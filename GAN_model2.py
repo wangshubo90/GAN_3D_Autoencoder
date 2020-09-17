@@ -1,3 +1,5 @@
+#!/home/spl/ml/sitk/bin/python
+
 import tensorflow as tf 
 from tensorflow.keras import layers
 
@@ -40,3 +42,4 @@ def make_discriminator_model():
     model.add(layers.Dense(1))
 
     return model
+
