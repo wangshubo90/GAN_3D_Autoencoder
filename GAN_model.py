@@ -57,9 +57,10 @@ class GAE():
         decoder.add(Conv3DTranspose(filters=64, kernel_size=3, strides=(2,)*3, padding="SAME", activation='relu'))
         decoder.add(Conv3DTranspose(filters=32, kernel_size=3, strides=(2,)*3, padding="SAME", activation='relu'))
         decoder.add(Conv3DTranspose(filters=16, kernel_size=3, strides=(2,)*3, padding="SAME", activation='relu'))
+        decoder.add(Conv3DTranspose(filters=1, kernel_size=3, strides=(2,)*3, padding="SAME", activation='relu'))
+
         #decoder.add(Dense(1000, activation='relu'))
         #decoder.add(Dense(np.prod(img_shape), activation='sigmoid'))
-        decoder.add(Reshape(img_shape))
         decoder.summary()
         return decoder
 
@@ -71,16 +72,18 @@ class GAE():
             A sequential keras model
         """
         discriminator = Sequential()
-        discriminator.add(Flatten(input_shape=img_shape))
-        discriminator.add(Dense(10000, activation='relu',
-                                kernel_initializer=self.initializer,
-                                bias_initializer=self.initializer))
-        discriminator.add(Dense(1000, activation='relu', 
-                                kernel_initializer=self.initializer,
-                                bias_initializer=self.initializer))
-        discriminator.add(Dense(1, activation='sigmoid', 
-                                kernel_initializer=self.initializer,
-                                bias_initializer=self.initializer))
+        discriminator.add(keras.layers.Conv3D(input_shape = img_shape, filters = 16, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
+        discriminator.add(keras.layers.Conv3D(input_shape = img_shape, filters = 32, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
+        discriminator.add(keras.layers.Conv3D(input_shape = img_shape, filters = 64, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
+        discriminator.add(keras.layers.Conv3D(input_shape = img_shape, filters = 128, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
+        discriminator.add(keras.layers.GlobalAvgPool3D())
+        discriminator.add(keras.layers.Flatten())
+        discriminator.add(Dense(32, activation="relu"))
+        discriminator.add(Dense(1, activation="sigmoid"))
         discriminator.summary()
         return discriminator
 
@@ -182,3 +185,8 @@ class GAE():
 
     def meanLogLikelihood(self, x_test):
         KernelDensity(kernel='gaussian', bandwidth=0.2).fit(codes)
+
+if __name__ == "__main__":
+    sample = np.ones(shape = (4, 48, 96, 96, 1))
+    model = GAE()
+    model.train(sample, batch_size=4, epochs=5)
