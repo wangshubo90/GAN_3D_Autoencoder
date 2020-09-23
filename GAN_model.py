@@ -29,12 +29,18 @@ class GAE():
         """
         encoder = Sequential()
         encoder.add(keras.layers.Conv3D(input_shape = img_shape, filters = 16, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        encoder.add(keras.layers.Dropout(0.2))
+        encoder.add(keras.layers.Conv3D(filters = 16, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         encoder.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
-        encoder.add(keras.layers.Conv3D(input_shape = img_shape, filters = 32, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        
+        encoder.add(keras.layers.Conv3D(filters = 32, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        encoder.add(keras.layers.Dropout(0.2))
+        encoder.add(keras.layers.Conv3D(filters = 32, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         encoder.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
-        encoder.add(keras.layers.Conv3D(input_shape = img_shape, filters = 64, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
-        encoder.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
-        encoder.add(keras.layers.Conv3D(input_shape = img_shape, filters = 128, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        
+        encoder.add(keras.layers.Conv3D(filters = 64, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        encoder.add(keras.layers.Dropout(0.2))
+        encoder.add(keras.layers.Conv3D(filters = 64, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         encoder.add(keras.layers.MaxPool3D(pool_size=(2,)*3, padding="SAME"))
         encoder.add(keras.layers.GlobalAvgPool3D())
         encoder.add(keras.layers.Flatten())
@@ -123,7 +129,7 @@ class GAE():
         plt.close(fig)
 
     def train(self, x_train, batch_size=4, epochs=5):
-        self.autoencoder.fit(x_train, x_train, epochs=1)
+        self..(x_train, x_train, epochs=1)
         for epoch in range(epochs):
             #---------------Train Discriminator -------------
             # Select a random half batch of images
@@ -165,6 +171,11 @@ class GAE():
         images = self.decoder.predict(codes)
         return images
 
+    def autoEncode(self, image):
+        codes = self.encoder(image)
+        gen_image = self.decoder(codes)
+        return gen_image
+
     def generateAndPlot(self, x_train, n = 10, fileName="generated.png"):
         fig = plt.figure(figsize=[20, 20])
         images = self.generate(n*n)
@@ -189,4 +200,4 @@ class GAE():
 if __name__ == "__main__":
     sample = np.ones(shape = (4, 48, 96, 96, 1))
     model = GAE()
-    model.train(sample, batch_size=4, epochs=5)
+    model.train(sample, batch_size=8, epochs=500)

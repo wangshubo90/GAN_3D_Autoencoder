@@ -6,8 +6,8 @@ import os
 import SimpleITK as sitk 
 import numpy as np
 
-datapath = r'../Data'
-file_reference = r'../Training/File_reference.csv'
+datapath = r'../100x100x48 niis'
+file_reference = r'../File_reference.csv'
 
 img_ls = os.listdir(datapath)
 train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
@@ -20,4 +20,4 @@ for idx, file in enumerate(img_ls):
 
 
 model = GAE()
-model.train(train_dataset, batch_size=32, epochs=100)
+model.train(train_set, batch_size=32, epochs=500)
