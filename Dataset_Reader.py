@@ -54,7 +54,7 @@ def DataGenerator(file_ls, label_ls, augmentation = None, example_n = 2, special
                         imgls.append(normalize(augmentation(img)))
 
                     for img in imgls:
-                        yield img, y
+                        yield img
 
                 elif y > 0 :
                     imgls = [normalize(orig_img)]
@@ -63,7 +63,7 @@ def DataGenerator(file_ls, label_ls, augmentation = None, example_n = 2, special
                         imgls.append(normalize(augmentation(img)))
 
                     for img in imgls:
-                        yield img, y
+                        yield img
         
             else:
                 yield normalize(orig_img)
@@ -100,7 +100,7 @@ def Reader(file_ref, data_path, augmentation = RotateAugmentation):
     val_img, evl_img, val_l, evl_l = train_test_split(
             test_img, test_l, test_size = 0.5, random_state=42
     )
-
+    '''
     print(train_img.shape)
     print(val_img.shape)
     print(evl_img.shape)
@@ -108,7 +108,7 @@ def Reader(file_ref, data_path, augmentation = RotateAugmentation):
     print(sum(train_l >= 1) / train_l.shape[0])
     print(sum(val_l >= 1) / val_l.shape[0])
     print(sum(evl_l >= 1) / evl_l.shape[0])
-
+    '''
     BATCH_SIZE = 36
 
     train_set = DatasetReader(train_img, train_l, 640, BATCH_SIZE,

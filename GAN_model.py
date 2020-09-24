@@ -129,7 +129,7 @@ class GAE():
         plt.close(fig)
 
     def train(self, x_train, batch_size=4, epochs=5):
-        self..(x_train, x_train, epochs=1)
+        self.autoencoder.fit(x_train, x_train, epochs=1)
         for epoch in range(epochs):
             #---------------Train Discriminator -------------
             # Select a random half batch of images
