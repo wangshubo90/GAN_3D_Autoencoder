@@ -133,6 +133,9 @@ class AAE():
         
         return self.history
 
+    def train_on_batch():
+        
+
     def load_model(self):
 
         return
