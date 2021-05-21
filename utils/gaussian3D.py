@@ -18,7 +18,7 @@ def _gaussianMatrix(sigma, kernel_size):
     return kernel / np.sum(kernel)
 
 @tf.function    
-def Gaussian3DFilter(input, sigma, kernel_size=None):
+def gaussianFilter3D(input, sigma, kernel_size=None):
     """
     apply 3d guassian filter on a 3d image (a 5D tf.tensor)
     """
@@ -53,11 +53,6 @@ def gaussian_kernel(size: int,
 
 if __name__=="__main__":
 
-    from Dataset_Reader import Reader
+    test = tf.zeros((1,6,6,6,1))
 
-    train, _, _ = Reader(r"../Training/File_reference.csv", r"../Data")
-
-    test = list(train.take(1))[0]
-    print(test.shape)
-
-    print(_gaussianMatrix(3, 9))
+    print(gaussianFilter3D(test,1))
