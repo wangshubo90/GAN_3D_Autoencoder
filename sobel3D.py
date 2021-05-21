@@ -1,11 +1,8 @@
-from sys import implementation
-from numpy.compat.py3k import getexception
-from numpy.core.arrayprint import dtype_is_implied
-from scipy.signal.signaltools import convolve2d
 import tensorflow as tf
 import numpy as np
 from scipy.signal import convolve2d as conv2d
 
+@tf.function
 def sobel3Dfilter(input):
     """
     Description: this is an implementation of 3D sobel silter for tensorflow
@@ -32,7 +29,7 @@ def sobel3Dfilter(input):
         Gy[i,:,:] = hz[i] * conv2d(hx, hpy, mode="full") # h'_y = h'(y) :: h(x) :: h(z) | this is why we cannot use tf.nn.conv3d which only has 
         Gz[i,:,:] = hpz[i] * conv2d(hx, hy, mode="full") # h'_y = h'(z) :: h(x) :: h(y) | valid and same padding while scipy.signal has no conv3d. 
 
-    Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1))
+    Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1)) # image 3 dimension + channel + output channel
     Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1))
     Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1))
 
@@ -44,3 +41,9 @@ def sobel3Dfilter(input):
         tf.math.square(grad_x)+tf.math.square(grad_y)+tf.math.square(grad_z))
 
     return output
+
+if __name__=="__main__":
+
+    test = tf.zeros((1,6,6,6,1))
+    sobel3Dfilter(test)
+    
