@@ -7,3 +7,7 @@ docker rm $(docker ps -a -q)
 #remove all images
 
 docker rmi -f $(docker images -a -q)
+
+#update an image
+docker inspect <image_id>
+

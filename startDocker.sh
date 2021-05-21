@@ -25,7 +25,7 @@ echo -----------------------------------
 extraFlag="-it "
 cmd2run="/bin/bash"
 
-extraFlag=${extraFlag}" -p "${jnotebookPort}":8890"
+extraFlag=${extraFlag}" -p "${jnotebookPort}":8888"
 
 docker run --rm ${extraFlag} \
   --name=${DOCKER_Run_Name} \
