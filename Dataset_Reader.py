@@ -33,7 +33,7 @@ def RotateAugmentation(img):
 def IdentityAugmentation(img):
     return img[2:98, 2:98, :]
 
-def DataGenerator(file_ls, label_ls, augmentation = None, example_n = 2, special_multiplier = 1):
+def DataGenerator(file_ls, label_ls, datapath, augmentation = None, example_n = 2, special_multiplier = 1):
     def normalize(img):
         if type(img) == sitk.Image:
             img = sitk.GetArrayFromImage(img)
@@ -70,8 +70,8 @@ def DataGenerator(file_ls, label_ls, augmentation = None, example_n = 2, special
 
     return generator
 
-def DatasetReader(file_ls, label_ls, shuffle_size, batch_size, augmentation = None, example_n = 2, special_multiplier = 1):
-    generator = DataGenerator(file_ls, label_ls, augmentation=augmentation, 
+def DatasetReader(file_ls, label_ls, data_path, shuffle_size, batch_size, augmentation = None, example_n = 2, special_multiplier = 1):
+    generator = DataGenerator(file_ls, label_ls, data_path, augmentation=augmentation, 
             example_n = example_n, special_multiplier = special_multiplier
     )
     dataset = tf.data.Dataset.from_generator(generator,
@@ -85,7 +85,7 @@ def DatasetReader(file_ls, label_ls, shuffle_size, batch_size, augmentation = No
 
 def Reader(file_ref, data_path, augmentation = RotateAugmentation):
     np.random.seed(42)
-    datapath = data_path  #path to data dir
+    
     file_df = pd.read_csv(file_ref)
 
     file_ls = file_df['File name'].to_numpy()
@@ -111,9 +111,9 @@ def Reader(file_ref, data_path, augmentation = RotateAugmentation):
     '''
     BATCH_SIZE = 36
 
-    train_set = DatasetReader(train_img, train_l, 640, BATCH_SIZE,
+    train_set = DatasetReader(train_img, train_l, data_path, 640, BATCH_SIZE,
             augmentation = RotateAugmentation, example_n = 1, special_multiplier = 2
     )
-    val_set = DatasetReader(val_img, val_l, 180, BATCH_SIZE) #, augmentation = IdentityAugmentation, example_n = 1, special_multiplier = 1
-    evl_set = DatasetReader(evl_img, evl_l, 180, BATCH_SIZE)
+    val_set = DatasetReader(val_img, val_l, data_path, 180, BATCH_SIZE) #, augmentation = IdentityAugmentation, example_n = 1, special_multiplier = 1
+    evl_set = DatasetReader(evl_img, evl_l, data_path, 180, BATCH_SIZE)
     return train_set, val_set, evl_set
