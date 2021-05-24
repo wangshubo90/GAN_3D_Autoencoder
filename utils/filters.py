@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow import keras
 import numpy as np
 from scipy.signal import convolve2d as conv2d
 
@@ -42,25 +43,45 @@ def sobelFilter3D(input):
 
     return output
 
+@tf.function    
+def gaussianFilter3D(input, sigma, kernel_size=None):
+    """
+    apply 3d guassian filter on a 3d image (a 5D tf.tensor)
+    """
+    if kernel_size == None:
+        kernel_size = int(sigma * 6)+1
+    
+    ax = np.linspace(-(kernel_size - 1) / 2., (kernel_size - 1) / 2., kernel_size)
+    xx, yy, zz= np.meshgrid(ax, ax, ax)
+    kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy) + np.square(zz)) / np.power(sigma,2))
+    kernel = kernel / np.sum(kernel)
+
+    kernel = tf.constant(kernel, dtype=tf.float32)
+    kernel = kernel[:,:,:,tf.newaxis, tf.newaxis] # image 3 dimension + No. of channel + No. of output channel
+
+    output=tf.nn.conv3d(input, kernel, strides=(1,1,1,1,1), padding="SAME")
+
+    return output
+
 if __name__=="__main__":
     #test 1: zeros tensor input
-    tf.get_logger().setLevel('INFO')
     print("test 1: zeros tensor input")
     test = tf.zeros((1,6,6,6,1))
-    sobelFilter3D(test)
+    gaussianFilter3D(test,0.1,3)
 
     #test 2: image input test
     print("test 2: image input test")
     import SimpleITK as sitk
-    image = sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz")
-    tfimage = tf.convert_to_tensor(sitk.GetArrayFromImage(image))    
+    image = sitk.GetArrayFromImage(sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz"))
+    print(image.shape)
+    tfimage = tf.convert_to_tensor(image)    
     tfimage = tfimage[tf.newaxis,:,:,:,tf.newaxis]
-    output = sobelFilter3D(tfimage).numpy()
+    output = gaussianFilter3D(tfimage,0.5,3).numpy()
     output= np.squeeze(output)
-    sitk.WriteImage(sitk.GetImageFromArray(output), r"/uCTGan/data/unitTest/test_output.nii.gz")
+    print(output.shape)
+    sitk.WriteImage(sitk.GetImageFromArray(output), r"/uCTGan/data/unitTest/test_gaussian.nii.gz")
 
+    output2 = sobelFilter3D(tfimage).numpy()
+    output2 = np.squeeze(output2)
+    sitk.WriteImage(sitk.GetImageFromArray(output2), r"/uCTGan/data/unitTest/test_sobel.nii.gz")
     #test 3: train step test
-    print("test 3: train step test")
-    
-
-    
