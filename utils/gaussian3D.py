@@ -3,6 +3,14 @@ import tensorflow as tf
 from tensorflow import keras
 import scipy.stats as st
 
+def _gussianFilterKernel(sigma, kernel_size):
+
+    ax = np.linspace(-(kernel_size - 1) / 2., (kernel_size - 1) / 2., kernel_size)
+    xx, yy, zz= np.meshgrid(ax, ax, ax)
+    kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy) + np.square(zz)) / np.power(sigma,2))
+    kernel = kernel / np.sum(kernel)    
+    
+    return kernel
 
 def gaussianFilter3D(input, sigma, kernel_size=None):
     """
