@@ -12,19 +12,29 @@ def focalImageLoss(y_true, y_pred, threshold):
     return
 
 def focalMSE(y_true, y_pred, alpha=1.0, gamma=5.0):
+    """
+    Description: focal MSE loss
+    """
     mse = keras.losses.mse(y_true, y_pred)
-
     loss =alpha* tf.pow(1-y_true, gamma) * mse[:,:,:,:,tf.newaxis]
 
-    return tf.reduce_mean(loss)
+    return tf.reduce_sum(loss)
 
 def meanGradientError(y_true, y_pred):
+    """
+    Description: mean gradient error
+    """
     mge = keras.losses.mse(sobelFilter3D(y_true), sobelFilter3D(y_pred))
+
     return tf.reduce_mean(mge)
 
 def mixedGradeintError(y_true, y_pred, alpha=0.5):
+    """
+    Description: Mixed gradient error
+    """
     mge = keras.losses.mse(sobelFilter3D(y_true), sobelFilter3D(y_pred))
     mse = keras.losses.mse(y_true, y_pred)
+
     return tf.reduce_mean(alpha * mge + (1-alpha)*mse)
     
 if __name__=="__main__":
