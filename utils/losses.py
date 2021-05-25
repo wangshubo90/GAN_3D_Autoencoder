@@ -1,7 +1,12 @@
-from filters import sobelFilter3D
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
+try:
+    from utils import filters
+except ModuleNotFoundError:
+    import filters
+
+from filters import sobelFilter3D, gaussianFilter3D
 
 def focalImageLoss(y_true, y_pred, threshold):
     return
@@ -25,15 +30,15 @@ def mixedGradeintError(y_true, y_pred, alpha=0.5):
 if __name__=="__main__":
     
     import SimpleITK as sitk
-    import filters
-    #image = sitk.GetArrayFromImage(sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz"))
-    image = sitk.GetArrayFromImage(sitk.ReadImage(r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Data\236LT_w1.nii.gz"))
-    #lossfn = tf.keras.losses.MeanSquaredError(reduction="auto", name="mean_squared_error")
-    lossfn = focalMSE
+
+    image = sitk.GetArrayFromImage(sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz"))
+    #image = sitk.GetArrayFromImage(sitk.ReadImage(r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Data\236LT_w1.nii.gz"))
+    lossfn = tf.keras.losses.MeanSquaredError(reduction="auto", name="mean_squared_error")
+    #lossfn = focalMSE
     tf.random.set_seed(42)
 
 
-    tfimage = tf.convert_to_tensor(image, dtype=tf.float32) / 255.    
+    tfimage = tf.convert_to_tensor(image, dtype=tf.float32) / tf.reduce_max(image)
     tfimage = tfimage[tf.newaxis,:,:,:,tf.newaxis]
     #tfimage = tf.reshape(tfimage, shape=(1,*tfimage.shape,1))
     tfzero = tf.zeros_like(tfimage)
@@ -49,7 +54,7 @@ if __name__=="__main__":
 
     for epoch in range(1000):
         epoch_loss_avg = tf.keras.metrics.Mean()
-        epoch_accuracy = tf.keras.metrics.MeanSquaredError()
+        epoch_accuracy = tf.keras.metrics.MeanAbsolutePercentageError()
 
         with tf.GradientTape() as tape:
             trueimg = filters.gaussianFilter3D(tfimage, 0.5, 3)
