@@ -6,8 +6,6 @@ try:
 except ModuleNotFoundError:
     import filters
 
-from filters import sobelFilter3D, gaussianFilter3D
-
 def focalSoftMSE(y_true, y_pred, alpha=0.1, beta=10.0):
 
     squareError = tf.math.squared_difference(y_true, y_pred)

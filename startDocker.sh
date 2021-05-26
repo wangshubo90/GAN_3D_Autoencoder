@@ -27,7 +27,7 @@ cmd2run="/bin/bash"
 
 extraFlag=${extraFlag}" -p "${jnotebookPort}":8888"
 
-docker run --rm ${extraFlag} \
+docker run -it --rm ${extraFlag} \
   --name=${DOCKER_Run_Name} \
   --gpus ${GPU_IDs} \
   -v ${WORK_SPACE}:/uCTGan \
