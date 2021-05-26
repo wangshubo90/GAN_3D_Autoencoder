@@ -49,12 +49,11 @@ if __name__=="__main__":
     
     import SimpleITK as sitk
 
-    image = sitk.GetArrayFromImage(sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz"))
-    #image = sitk.GetArrayFromImage(sitk.ReadImage(r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Data\236LT_w1.nii.gz"))
-    lossfn = tf.keras.losses.MeanSquaredError(reduction="auto", name="mean_squared_error")
-    #lossfn = focalMSE
+    #image = sitk.GetArrayFromImage(sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz"))
+    image = sitk.GetArrayFromImage(sitk.ReadImage(r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Data\236LT_w1.nii.gz"))
+    #lossfn = tf.keras.losses.MeanSquaredError(reduction="auto", name="mean_squared_error")
+    lossfn = focalSoftMSE
     tf.random.set_seed(42)
-
 
     tfimage = tf.convert_to_tensor(image, dtype=tf.float32) / tf.reduce_max(image)
     tfimage = tfimage[tf.newaxis,:,:,:,tf.newaxis]
