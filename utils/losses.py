@@ -8,6 +8,14 @@ except ModuleNotFoundError:
 
 from filters import sobelFilter3D, gaussianFilter3D
 
+def focalSoftMSE(y_true, y_pred, alpha=0.1, beta=10.0):
+
+    squareError = tf.math.squared_difference(y_true, y_pred)
+    softplus = tf.math.log(1+alpha*tf.math.exp(squareError * beta + 3))
+    loss = squareError * softplus
+
+    return tf.reduce_mean(loss)
+
 def focalImageLoss(y_true, y_pred, threshold):
     return
 
