@@ -1,9 +1,13 @@
 
 from functools import partial
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from keras.layers import Conv3D, BatchNormalization, Activation
-from keras.layers import Add
+from tensorflow.python.keras.backend import conv3d, relu
+from tensorflow.keras.layers import Conv1D, Conv3D, BatchNormalization, Activation
+from tensorflow.keras.layers import Add
+from tensorflow.keras.activations import relu
+from tensorflow.python.keras.layers.convolutional import Conv1DTranspose
 
 def __default_conv3D(input, filters=8, kernel_size=3, strides=(1,1,1), weight_decay = 1e-4, **kwargs):
     '''
@@ -46,11 +50,7 @@ def __bottleneck_layer(input, filters = 64, kernel_size = 3, strides = (1,1,1), 
     
     return x
 
-def __residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), **kwargs):
-
-    return x
-
-def __ResNeXt_block(input, filters = 64, kernel_size = 3, strides = (1,1,1), cardinality = 16, weight_decay = 5e-4):
+def resnext_block(input, filters = 64, kernel_size = 3, strides = (1,1,1), cardinality = 16, weight_decay = 5e-4):
     '''
     Description: refer to the ResNeXt architechture. One ResNeXt_block contains several paths (cardinality) of bottleneck layers joint by a skip connection.
     '''
@@ -71,4 +71,50 @@ def __ResNeXt_block(input, filters = 64, kernel_size = 3, strides = (1,1,1), car
     x = Add()(x)
     x = Activation('relu')(x)
 
+    return x
+
+def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), **kwargs):
+    identity = input
+    
+    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=strides, **kwargs)(input)
+    x = BatchNormalization()(x)
+    x = relu(x)
+    
+    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), **kwargs)(x)
+    
+    if np.prod(strides) > 1:
+        identity = Conv3D(filters=filters, kernel_size=1, strides=strides, **kwargs)(identity)
+    else:
+        pass
+    
+    x = x + identity
+    
+    x = BatchNormalization()(x)
+    x = relu(x)
+    
+    return x
+
+def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), compression=2, **kwargs):
+    identity = input
+    
+    x = Conv3D(filters = filters // compression, kernel_size=1, strides=strides, **kwargs)(input)
+    x = BatchNormalization()(x)
+    x = relu(x)
+    
+    x = Conv3D(filters = filters // compression, kernel_size=kernel_size, strides=(1,1,1), **kwargs)(x)
+    x = BatchNormalization()(x)
+    x = relu(x)
+    
+    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), **kwargs)(x)
+
+    if np.prod(strides) > 1:
+        identity = Conv3D(filters=filters, kernel_size=1, strides=strides, **kwargs)(identity)
+    else:
+        pass
+    
+    x = x + identity
+    
+    x = BatchNormalization()(x)
+    x = relu(x)
+    
     return x
