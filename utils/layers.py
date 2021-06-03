@@ -73,12 +73,12 @@ def resnext_block(input, filters = 64, kernel_size = 3, strides = (1,1,1), cardi
 
     return x
 
-def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding = "SAME", **kwargs):
+def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding = "SAME", activate=relu, **kwargs):
     identity = input
     
     x = Conv3D(filters = filters, kernel_size=kernel_size, strides=strides, padding = padding, **kwargs)(input)
     x = BatchNormalization()(x)
-    x = relu(x)
+    x = activate(x)
 
     x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
     x = BatchNormalization()(x)    
@@ -90,20 +90,20 @@ def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), paddi
         pass
     
     x = x + identity
-    x = relu(x)
+    x = activate(x)
     
     return x
 
-def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1),  padding = "SAME", compression=2, **kwargs):
+def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1),  padding = "SAME", compression=2, activate=relu, **kwargs):
     identity = input
     
     x = Conv3D(filters = filters // compression, kernel_size=1, strides=strides, padding = padding, **kwargs)(input)
     x = BatchNormalization()(x)
-    x = relu(x)
+    x = activate(x)
     
     x = Conv3D(filters = filters // compression, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
     x = BatchNormalization()(x)
-    x = relu(x)
+    x = activate(x)
     
     x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
     x = BatchNormalization()(x)
@@ -115,6 +115,12 @@ def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1),  padding
         pass
     
     x = x + identity
-    x = relu(x)
+    x = activate(x)
     
     return x
+
+if __name__=="__main__":
+
+    input = tf.zeros(shape = (3, 96, 100, 100, 1))
+    y1 = residual_block(input, strides=(2,2,2))
+    y2 = resBN_block(input, strides=(2,2,2))
