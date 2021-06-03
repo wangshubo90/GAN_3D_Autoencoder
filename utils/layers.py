@@ -73,17 +73,17 @@ def resnext_block(input, filters = 64, kernel_size = 3, strides = (1,1,1), cardi
 
     return x
 
-def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), **kwargs):
+def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding = "SAME", **kwargs):
     identity = input
     
-    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=strides, **kwargs)(input)
+    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=strides, padding = padding, **kwargs)(input)
     x = BatchNormalization()(x)
     x = relu(x)
     
-    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), **kwargs)(x)
+    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
     
     if np.prod(strides) > 1:
-        identity = Conv3D(filters=filters, kernel_size=1, strides=strides, **kwargs)(identity)
+        identity = Conv3D(filters=filters, kernel_size=1, strides=strides, padding = padding, **kwargs)(identity)
     else:
         pass
     
@@ -94,21 +94,21 @@ def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), **kwa
     
     return x
 
-def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), compression=2, **kwargs):
+def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), compression=2, padding = "SAME", **kwargs):
     identity = input
     
-    x = Conv3D(filters = filters // compression, kernel_size=1, strides=strides, **kwargs)(input)
+    x = Conv3D(filters = filters // compression, kernel_size=1, strides=strides, padding = padding, **kwargs)(input)
     x = BatchNormalization()(x)
     x = relu(x)
     
-    x = Conv3D(filters = filters // compression, kernel_size=kernel_size, strides=(1,1,1), **kwargs)(x)
+    x = Conv3D(filters = filters // compression, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
     x = BatchNormalization()(x)
     x = relu(x)
     
-    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), **kwargs)(x)
+    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
 
     if np.prod(strides) > 1:
-        identity = Conv3D(filters=filters, kernel_size=1, strides=strides, **kwargs)(identity)
+        identity = Conv3D(filters=filters, kernel_size=1, strides=strides, padding = padding, **kwargs)(identity)
     else:
         pass
     
