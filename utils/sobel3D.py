@@ -3,7 +3,7 @@ import numpy as np
 from scipy.signal import convolve2d as conv2d
 
 @tf.function
-def sobel3Dfilter(input):
+def sobelFilter3D(input):
     """
     Description: this is an implementation of 3D sobel silter for tensorflow
     reference: 
@@ -43,7 +43,24 @@ def sobel3Dfilter(input):
     return output
 
 if __name__=="__main__":
-
+    #test 1: zeros tensor input
+    tf.get_logger().setLevel('INFO')
+    print("test 1: zeros tensor input")
     test = tf.zeros((1,6,6,6,1))
-    sobel3Dfilter(test)
+    sobelFilter3D(test)
+
+    #test 2: image input test
+    print("test 2: image input test")
+    import SimpleITK as sitk
+    image = sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz")
+    tfimage = tf.convert_to_tensor(sitk.GetArrayFromImage(image))    
+    tfimage = tfimage[tf.newaxis,:,:,:,tf.newaxis]
+    output = sobelFilter3D(tfimage).numpy()
+    output= np.squeeze(output)
+    sitk.WriteImage(sitk.GetImageFromArray(output), r"/uCTGan/data/unitTest/test_output.nii.gz")
+
+    #test 3: train step test
+    print("test 3: train step test")
+    
+
     

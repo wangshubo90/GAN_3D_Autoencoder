@@ -4,7 +4,7 @@ from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Dense, Input, Flatten, Reshape, Conv3DTranspose
 from tensorflow.keras.optimizers import Adam, SGD
 import numpy as np
-from sklearn.neighbors.kde import KernelDensity
+from sklearn.neighbors import KernelDensity
 from tensorflow.keras.initializers import RandomNormal
 
 class GAE():

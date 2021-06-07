@@ -2,6 +2,7 @@ FROM nvidia/cuda:10.1-devel-ubuntu18.04
 
 # TensorFlow version is tightly coupled to CUDA and cuDNN so it should be selected carefully
 ENV TENSORFLOW_VERSION=2.3.0
+ENV TENSORFLOW_ADDONS_VERSION=0.11.2
 ENV PYTORCH_VERSION=1.6.0
 ENV PYTORCH_LIGHTNING_VERSION=1.2.9
 ENV TORCHVISION_VERSION=0.7.0
@@ -50,7 +51,8 @@ RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
 RUN pip install future typing packaging
 RUN pip install tensorflow==${TENSORFLOW_VERSION} \
                 keras \
-                h5py
+                h5py \
+                tensorflow-addons==${TENSORFLOW_ADDONS_VERSION}
 
 RUN PYTAGS=$(python -c "from packaging import tags; tag = list(tags.sys_tags())[0]; print(f'{tag.interpreter}-{tag.abi}')") && \
     pip install https://download.pytorch.org/whl/cu101/torch-${PYTORCH_VERSION}%2Bcu101-${PYTAGS}-linux_x86_64.whl \
@@ -68,7 +70,7 @@ RUN pip install ${PYSPARK_PACKAGE}
 
 # Install Other Python packages
 
-RUN pip install SimpleITK jupyter scikit-learn scikit-image opencv-python tqdm matplotlib
+RUN pip install SimpleITK jupyter scikit-learn scikit-image opencv-python tqdm matplotlib ray
 
 # Install Open MPI
 RUN mkdir /tmp/openmpi && \
