@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.python.keras.backend import conv3d, relu
-from tensorflow.keras.layers import Conv1D, Conv3D, BatchNormalization, Activation
+from tensorflow.keras.layers import Conv3DTranspose, Conv3D, BatchNormalization, Activation
 from tensorflow.keras.layers import Add
 from tensorflow.keras.activations import relu
 from tensorflow.python.keras.layers.convolutional import Conv1DTranspose
@@ -97,7 +97,7 @@ def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), paddi
 def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1),  padding = "SAME", compression=2, activate=relu, **kwargs):
     identity = input
     
-    x = Conv3D(filters = filters // compression, kernel_size=1, strides=strides, padding = padding, **kwargs)(input)
+    x = Conv3DTranspose(filters = filters // compression, kernel_size=1, strides=strides, padding = padding, **kwargs)(input)
     x = BatchNormalization()(x)
     x = activate(x)
     
@@ -119,6 +119,27 @@ def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1),  padding
     
     return x
 
+def resTP_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding = "SAME", activate=relu, **kwargs):
+    identity = input
+    
+    x = Conv3DTranspose(filters = filters, kernel_size=kernel_size, strides=strides, padding = padding, **kwargs)(input)
+    x = BatchNormalization()(x)
+    x = activate(x)
+
+    x = Conv3DTranspose(filters = filters, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
+    x = BatchNormalization()(x)    
+
+    if np.prod(strides) > 1:
+        identity = Conv3DTranspose(filters=filters, kernel_size=1, strides=strides, padding = padding, **kwargs)(identity)
+        identity = BatchNormalization()(identity)  
+    else:
+        pass
+    
+    x = x + identity
+    x = activate(x)
+
+    return
+    
 if __name__=="__main__":
 
     input = tf.zeros(shape = (3, 96, 100, 100, 1))
