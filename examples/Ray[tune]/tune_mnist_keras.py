@@ -1,5 +1,6 @@
 import argparse
 import os
+import tensorflow as tf
 
 from filelock import FileLock
 from tensorflow.keras.datasets import mnist
@@ -7,10 +8,9 @@ from tensorflow.keras.datasets import mnist
 import ray
 from ray import tune
 from ray.tune.schedulers import AsyncHyperBandScheduler
-from ray.tune.integration.keras import TuneReportCallback
+from ray.tune.integration.keras import TuneReportCallback, TuneReportCheckpointCallback
 
-
-def train_mnist(config):
+def train_mnist(config, checkpoint_dir=None):
     # https://github.com/tensorflow/tensorflow/issues/32159
     import tensorflow as tf
     batch_size = 128
@@ -40,9 +40,13 @@ def train_mnist(config):
         epochs=epochs,
         verbose=0,
         validation_data=(x_test, y_test),
-        callbacks=[TuneReportCallback({
-            "mean_accuracy": "accuracy"
-        })])
+        callbacks=[
+            TuneReportCheckpointCallback(metrics={"mean_accuracy": "accuracy"},
+                filename="model",
+                frequency=1,
+                on="epoch_end")
+        ]
+    )
 
 
 def tune_mnist(num_training_iterations):
@@ -51,7 +55,7 @@ def tune_mnist(num_training_iterations):
 
     analysis = tune.run(
         train_mnist,
-        name="exp",
+        name="keras_mnist",
         scheduler=sched,
         metric="mean_accuracy",
         mode="max",
@@ -62,7 +66,7 @@ def tune_mnist(num_training_iterations):
         num_samples=10,
         resources_per_trial={
             "cpu": 2,
-            "gpu": 0
+            "gpu": 1
         },
         config={
             "threads": 2,

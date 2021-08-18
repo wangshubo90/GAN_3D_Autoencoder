@@ -14,7 +14,7 @@ import os
 
 from filelock import FileLock
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
-from tensorflow.keras import Model
+from tensorflow.keras import Model, optimizers
 from tensorflow.keras.datasets.mnist import load_data
 
 from ray import tune
@@ -66,6 +66,7 @@ class MNISTTrainable(tune.Trainable):
         self.test_loss = tf.keras.metrics.Mean(name="test_loss")
         self.test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
             name="test_accuracy")
+        self.checkpoint = tf.train.Checkpoint(model=self.model, optimizer=self.optimizer)
 
         @tf.function
         def train_step(images, labels):
@@ -113,6 +114,14 @@ class MNISTTrainable(tune.Trainable):
             "mean_accuracy": self.test_accuracy.result().numpy() * 100
         }
 
+    def save_checkpoint(self, checkpoint_dir):
+        self.checkpoint.save(checkpoint_dir)
+        return checkpoint_dir
+
+    def load_checkpoint(self, checkpoint_dir):
+        
+        pass   
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -133,10 +142,12 @@ if __name__ == "__main__":
 
     analysis = tune.run(
         MNISTTrainable,
+        name="tf-mnist",
         metric="test_loss",
         mode="min",
         stop={"training_iteration": 5 if args.smoke_test else 50},
         verbose=1,
-        config={"hiddens": tune.grid_search([32, 64, 128])})
+        config={"hiddens": tune.grid_search([32, 64, 128])},
+        checkpoint_freq=1)
 
     print("Best hyperparameters found were: ", analysis.best_config)

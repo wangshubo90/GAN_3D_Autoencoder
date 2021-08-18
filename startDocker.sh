@@ -34,7 +34,7 @@ docker run -it --rm ${extraFlag} \
   -v ${DATA_DIR}:/uCTGan/data \
   -w /uCTGan \
   --runtime=nvidia \
-  --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --shm-size=9g --ulimit memlock=-1 --ulimit stack=67108864 \
   ${DOCKER_IMAGE} \
   ${cmd2run}
 
