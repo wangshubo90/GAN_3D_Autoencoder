@@ -3,4 +3,4 @@
 *.pyc
 *.nii
 /data/*
-startDocker.sh
+setENV.sh

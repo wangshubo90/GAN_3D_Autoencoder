@@ -1,10 +1,10 @@
 #!/bin/bash
-
+source setENV.sh
 DOCKER_IMAGE=horovod
 
 DOCKER_Run_Name=uctgan
-WORK_SPACE=$HOME/repos/GAN_3D_Autoencoder
-DATA_DIR=$HOME/data
+WORK_SPACE=$WORK_SPACE
+DATA_DIR=$DATA_DIR
 jnotebookPort=8888
 GPU_IDs=all
 
@@ -34,7 +34,7 @@ docker run -it --rm ${extraFlag} \
   -v ${DATA_DIR}:/uCTGan/data \
   -w /uCTGan \
   --runtime=nvidia \
-  --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
+  --shm-size=9g --ulimit memlock=-1 --ulimit stack=67108864 \
   ${DOCKER_IMAGE} \
   ${cmd2run}
 
