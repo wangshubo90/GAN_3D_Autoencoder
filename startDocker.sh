@@ -1,5 +1,5 @@
 #!/bin/bash
-
+source setENV.sh
 DOCKER_IMAGE=horovod
 
 DOCKER_Run_Name=uctgan
