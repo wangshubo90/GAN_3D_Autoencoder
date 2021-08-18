@@ -1,4 +1,4 @@
-
+import horovod.tensorflow as hvd
 
 #======================= Set up Horovod ======================
 # comment out this chunk of code if you train with 1 gpu
