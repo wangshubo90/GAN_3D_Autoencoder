@@ -3,8 +3,8 @@
 DOCKER_IMAGE=horovod
 
 DOCKER_Run_Name=uctgan
-WORK_SPACE=/opt/swang14/repos/GAN_3D_Autoencoder
-DATA_DIR=/opt/swang14/data
+WORK_SPACE=$WORK_SPACE
+DATA_DIR=$DATA_DIR
 jnotebookPort=8888
 GPU_IDs=all
 

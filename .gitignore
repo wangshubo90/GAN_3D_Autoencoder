@@ -3,3 +3,4 @@
 *.pyc
 *.nii
 /data/*
+setENV.sh
