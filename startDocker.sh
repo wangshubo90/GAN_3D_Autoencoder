@@ -26,15 +26,15 @@ echo -----------------------------------
 extraFlag="-it -d"
 cmd2run="/bin/bash"
 
-extraFlag=${extraFlag}" -p "${jnotebookPort}":8888 -p "${tensorboard}":6006"
+extraFlag=${extraFlag}" -p 0.0.0.0:"${jnotebookPort}":8888 -p 0.0.0.0:"${tensorboard}":6006"
 echo ${extraFlag}
 echo -----------------------------------
 docker run --rm ${extraFlag} \
   --name=${DOCKER_Run_Name} \
   --gpus ${GPU_IDs} \
-  -v ${WORK_SPACE}:/uCTGan \
-  -v ${DATA_DIR}:/uCTGan/data \
-  -w /uCTGan \
+  -v ${WORK_SPACE}:/uctgan \
+  -v ${DATA_DIR}:/uctgan/data \
+  -w /uctgan \
   --runtime=nvidia \
   --shm-size=9g --ulimit memlock=-1 --ulimit stack=67108864 \
   ${DOCKER_IMAGE} \
