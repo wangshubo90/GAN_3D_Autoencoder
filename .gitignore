@@ -4,3 +4,4 @@
 *.nii
 /data/*
 setENV.sh
+experiments/*

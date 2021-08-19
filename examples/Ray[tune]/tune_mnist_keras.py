@@ -2,7 +2,7 @@ import argparse
 import os
 #================ Environment variables ================
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
-
+os.environ['AUTOGRAPH_VERBOSITY'] = '1'
 import tensorflow as tf
 from filelock import FileLock
 from tensorflow.keras.datasets import mnist
@@ -61,7 +61,7 @@ def tune_mnist(num_training_iterations):
         scheduler=sched,
         metric="mean_accuracy",
         mode="max",
-        local_dir="/uctgan/data/ray_results",
+        local_dir="/uctgan/experiments/ray_results",
         stop={
             "mean_accuracy": 0.99,
             "training_iteration": num_training_iterations
