@@ -6,6 +6,7 @@ DOCKER_Run_Name=uctgan
 WORK_SPACE=$WORK_SPACE
 DATA_DIR=$DATA_DIR
 jnotebookPort=8888
+tensorboard=6006
 GPU_IDs=all
 
 #################################### check if name is used then exit
@@ -25,7 +26,7 @@ echo -----------------------------------
 extraFlag="-it "
 cmd2run="/bin/bash"
 
-extraFlag=${extraFlag}" -p "${jnotebookPort}":8888"
+extraFlag=${extraFlag}" -p "${jnotebookPort}":8888 -p "${tensorboard}
 
 docker run -it --rm ${extraFlag} \
   --name=${DOCKER_Run_Name} \
