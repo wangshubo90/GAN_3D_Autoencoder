@@ -70,7 +70,7 @@ RUN pip install ${PYSPARK_PACKAGE}
 
 # Install Other Python packages
 
-RUN pip install SimpleITK jupyter scikit-learn scikit-image opencv-python tqdm matplotlib ray
+RUN pip install SimpleITK jupyter scikit-learn scikit-image opencv-python tqdm matplotlib ray[default] ray[tune] 
 
 # Install Open MPI
 RUN mkdir /tmp/openmpi && \

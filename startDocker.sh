@@ -23,12 +23,13 @@ echo -----------------------------------
 echo starting docker for ${DOCKER_IMAGE} using GPUS ${GPU_IDs} jnotebookPort ${jnotebookPort} 
 echo -----------------------------------
 
-extraFlag="-it "
+extraFlag="-it -d"
 cmd2run="/bin/bash"
 
-extraFlag=${extraFlag}" -p "${jnotebookPort}":8888 -p "${tensorboard}
-
-docker run -it --rm ${extraFlag} \
+extraFlag=${extraFlag}" -p "${jnotebookPort}":8888 -p "${tensorboard}":6006"
+echo ${extraFlag}
+echo -----------------------------------
+docker run --rm ${extraFlag} \
   --name=${DOCKER_Run_Name} \
   --gpus ${GPU_IDs} \
   -v ${WORK_SPACE}:/uCTGan \

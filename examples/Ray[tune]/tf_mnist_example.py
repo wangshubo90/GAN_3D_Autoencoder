@@ -145,6 +145,7 @@ if __name__ == "__main__":
         name="tf-mnist",
         metric="test_loss",
         mode="min",
+        local_dir="/uctgan/data/ray_results",
         stop={"training_iteration": 5 if args.smoke_test else 50},
         verbose=1,
         config={"hiddens": tune.grid_search([32, 64, 128])},
