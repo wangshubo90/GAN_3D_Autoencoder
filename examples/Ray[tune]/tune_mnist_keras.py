@@ -2,7 +2,14 @@ import argparse
 import os
 #================ Environment variables ================
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
-os.environ['AUTOGRAPH_VERBOSITY'] = '1'
+os.environ['AUTOGRAPH_VERBOSITY'] = '2'
+tf.autograph.set_verbosity(2)
+tf.get_logger().setLevel(logging.ERROR)
+
+# import logging
+# logger = tf.get_logger()
+# logger.setLevel(logging.ERROR)
+
 import tensorflow as tf
 from filelock import FileLock
 from tensorflow.keras.datasets import mnist

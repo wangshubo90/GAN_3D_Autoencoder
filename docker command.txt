@@ -11,3 +11,13 @@ docker rmi -f $(docker images -a -q)
 #update an image
 docker inspect <image_id>
 
+# save an image to a file
+docker save -o <path for generated tar file> <image name>
+# load an image from file
+docker load -i <path to image tar file>
+
+# tag an image 
+docker tag DESIREDIMAGEID mycompany/myreponame
+
+# commit an image
+docker commit [OPTIONS] CONTAINER [REPOSITORY[:TAG]] --change <commands> --pause <true|false>

@@ -11,6 +11,9 @@
 
 import argparse
 import os
+import tensorflow as tf
+#================ Environment variables ================
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 from filelock import FileLock
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
