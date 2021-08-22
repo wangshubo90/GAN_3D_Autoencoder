@@ -56,11 +56,12 @@ RUN pip install tensorflow==${TENSORFLOW_VERSION} \
                 keras \
                 h5py \
                 tensorflow-addons==${TENSORFLOW_ADDONS_VERSION}\
-                tnesorflow_probability
+                tensorflow_probability
 
-RUN PYTAGS=$(python -c "from packaging import tags; tag = list(tags.sys_tags())[0]; print(f'{tag.interpreter}-{tag.abi}')") && \
-    pip install https://download.pytorch.org/whl/cu101/torch-${PYTORCH_VERSION}%2Bcu101-${PYTAGS}-linux_x86_64.whl \
-        https://download.pytorch.org/whl/cu101/torchvision-${TORCHVISION_VERSION}%2Bcu101-${PYTAGS}-linux_x86_64.whl
+RUN pip install --no-cache-dir \
+    torch==${PYTORCH_VERSION} \
+    torchvision==${TORCHVISION_VERSION} \
+    -f https://download.pytorch.org/whl/${PYTORCH_VERSION/*+/}/torch_stable.html
 RUN pip install pytorch_lightning==${PYTORCH_LIGHTNING_VERSION}
 #RUN pip install mxnet-cu101==${MXNET_VERSION}
 
