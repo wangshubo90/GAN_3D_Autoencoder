@@ -276,12 +276,12 @@ if __name__=="__main__":
         idx += 1
 
     config = {
-                        "optimizer_generator_lr" : 0.0005, 
-                        "optimizer_generator_beta" : 0.5, 
-                        "optimizer_discriminator_lr" : 0.0001, 
-                        "optimizer_discriminator_beta" : 0.5,
-                        "optimizer_autoencoder_lr" : 0.0001, 
-                        "optimizer_autoencoder_beta" : 0.9
+                        "optG_lr" : 0.0005, 
+                        "optG_beta" : 0.5, 
+                        "optD_lr" : 0.0001, 
+                        "optD_beta" : 0.5,
+                        "optAE_lr" : 0.0001, 
+                        "optAE_beta" : 0.9
                     }
 
     model = AAE(**config)

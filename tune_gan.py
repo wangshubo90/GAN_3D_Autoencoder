@@ -33,6 +33,7 @@ from model.AAE import AAE
 import numpy as np
 from random import sample
 from datapipeline.aae_reader import data_reader_np
+from functools import reduce
 
 class AAETrainable(tune.Trainable):
     def setup(self, config, batch_size=None, epochs=None, data=None):
@@ -114,9 +115,12 @@ for file in img_ls:
 # train_set = data_reader_np(train_set, 48, 16)
 
 def stopper(trial_id, result):
-    condition1 = result["AE_loss"]  < 0.005 or result["training_iteration"] > 2000
-    condition2 = result["training_iteration"] > 100 and result["AE_loss"]  > 1
-    return result["AE_loss"]  < 0.005 or result["training_iteration"] > 2000
+    conditions = [
+        result["AE_loss"]  < 0.005 or result["training_iteration"] > 2000,
+        result["AE_loss"]  > 1 and result["training_iteration"] > 300 ,
+        result["AE_loss"]  > 0.1 and result["training_iteration"] > 600 
+    ]
+    return reduce(lambda x,y: x or y, conditions)
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data=train_set),
@@ -132,13 +136,14 @@ analysis = tune.run(
     },
     stop=stopper, 
     config = {
-                "optimizer_generator_lr" : tune.loguniform(5e-6, 1e-3), 
-                "optimizer_generator_beta" : 0.5, 
-                "optimizer_discriminator_lr" : tune.loguniform(5e-6, 1e-3), 
-                "optimizer_discriminator_beta" : 0.5,
-                "optimizer_autoencoder_lr" : tune.loguniform(5e-6, 1e-3), 
-                "optimizer_autoencoder_beta" : 0.9
+                "optG_lr" : tune.loguniform(5e-6, 1e-3), 
+                "optG_beta" : 0.5, 
+                "optD_lr" : tune.loguniform(5e-6, 1e-3), 
+                "optD_beta" : 0.5,
+                "optAE_lr" : tune.loguniform(5e-6, 1e-3), 
+                "optAE_beta" : 0.9
             },
-    checkpoint_freq=1
+    checkpoint_freq=1,
+    fail_fast=True
 )
 print("Best hyperparameters found were: ", analysis.best_config)
