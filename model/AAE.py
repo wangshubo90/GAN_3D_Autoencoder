@@ -14,9 +14,9 @@ class AAE():
         self.hidden=hidden
         self.batch_size=batch_size
         self.epochs=epochs
-        self.optimizer_generator = Adam(kwargs["optimizer_generator_lr"], beta_1=kwargs["optimizer_generator_beta"])
-        self.optimizer_discriminator = Adam(kwargs["optimizer_discriminator_lr"], beta_1=kwargs["optimizer_discriminator_beta"])
-        self.optimizer_autoencoder = Adam(kwargs["optimizer_autoencoder_lr"], beta_1=kwargs["optimizer_autoencoder_beta"])
+        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=kwargs["optG_beta"])
+        self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=kwargs["optD_beta"])
+        self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=kwargs["optAE_beta"])
         self.img_shape = img_shape
         self.initializer = RandomNormal(mean=0., stddev=1.)
         self.encoder, self.decoder, self.autoencoder, self.discriminator, \
@@ -113,21 +113,29 @@ class AAE():
         discriminator = Sequential()
         discriminator.add(Conv3D(input_shape = img_shape, filters = 16, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         #discriminator.add(Dropout(0.2))
-        #discriminator.add(Conv3D(filters = 16, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(layers.BatchNormalization())
+        discriminator.add(Conv3D(filters = 16, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(layers.BatchNormalization())
         discriminator.add(MaxPool3D(pool_size=(2,)*3, padding="SAME"))
         
         #discriminator.add(Conv3D(filters = 32, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         #discriminator.add(Dropout(0.2))
         discriminator.add(Conv3D(filters = 32, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(layers.BatchNormalization())
+        discriminator.add(Conv3D(filters = 32, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(layers.BatchNormalization())
         discriminator.add(MaxPool3D(pool_size=(2,)*3, padding="SAME"))
         
         #discriminator.add(Conv3D(filters = 64, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         #discriminator.add(Dropout(0.2))
         discriminator.add(Conv3D(filters = 64, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(layers.BatchNormalization())
+        discriminator.add(Conv3D(filters = 64, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        discriminator.add(layers.BatchNormalization())
         discriminator.add(MaxPool3D(pool_size=(2,)*3, padding="SAME"))
 
         discriminator.add(Conv3D(filters = 128, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
-        #discriminator.add(MaxPool3D(pool_size=(2,)*3, padding="SAME"))
+        discriminator.add(layers.BatchNormalization())
         discriminator.add(GlobalAvgPool3D())
         #discriminator.add(Conv3D(filters = 1, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         discriminator.add(Flatten())

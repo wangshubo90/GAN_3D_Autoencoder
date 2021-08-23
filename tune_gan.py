@@ -34,6 +34,7 @@ import numpy as np
 from random import sample
 from datapipeline.aae_reader import data_reader_np
 from functools import reduce
+from sklearn.model_selection import train_test_split
 
 class AAETrainable(tune.Trainable):
     def setup(self, config, batch_size=None, epochs=None, data=None):
@@ -100,9 +101,11 @@ class AAETrainable(tune.Trainable):
 #===============set up dataset================
 datapath = r'/uctgan/data/udelCT'
 file_reference = r'./data/udelCT/File_reference.csv'
-
+seed=42
 img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
-train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
+train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
+val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
+train_set = np.zeros(shape=[len(train_img), 48, 96, 96, 1])
 
 idx = 0
 for file in img_ls:
@@ -117,13 +120,13 @@ for file in img_ls:
 def stopper(trial_id, result):
     conditions = [
         result["AE_loss"]  < 0.005 or result["training_iteration"] > 2000,
-        result["AE_loss"]  > 1 and result["training_iteration"] > 300 ,
-        result["AE_loss"]  > 0.1 and result["training_iteration"] > 600 
+        result["AE_loss"]  > 1 and result["training_iteration"] > 250 ,
+        result["AE_loss"]  > 0.2 and result["training_iteration"] > 500 
     ]
     return reduce(lambda x,y: x or y, conditions)
 
 analysis = tune.run(
-    tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data=train_set),
+    tune.with_parameters(AAETrainable, batch_size=12, epochs=5000, data=train_set),
     name="AAE_uct",
     metric="AE_loss",
     mode="min",
