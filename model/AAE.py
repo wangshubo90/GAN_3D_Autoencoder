@@ -273,6 +273,8 @@ if __name__=="__main__":
     file_reference = r'./data/udelCT/File_reference.csv'
 
     img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
+    
+
     train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
 
     idx = 0
