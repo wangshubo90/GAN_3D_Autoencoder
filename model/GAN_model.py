@@ -6,6 +6,7 @@ from tensorflow.keras.optimizers import Adam, SGD
 import numpy as np
 from sklearn.neighbors import KernelDensity
 from tensorflow.keras.initializers import RandomNormal
+import matplotlib as plt
 
 class GAE():
     def __init__(self, img_shape=(48, 96, 96, 1), encoded_dim=8, optimizer = SGD(0.001, momentum=.9), 

@@ -110,3 +110,5 @@ RUN apt-get install -y --no-install-recommends subversion && \
     rm -rf /examples/.svn
 
 WORKDIR "/examples"
+# set up cuda env
+RUN ln -s /usr/local/cuda-11.2/lib64/libcusolver.so.11 /usr/local/cuda-11.2/lib64/libcusolver.so.10 && export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
