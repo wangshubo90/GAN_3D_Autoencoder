@@ -32,46 +32,35 @@ import SimpleITK as sitk
 from model.AAE import AAE
 import numpy as np
 from random import sample
+from datapipeline.aae_reader import data_reader_np
 
 class AAETrainable(tune.Trainable):
-    def setup(self, config):
+    def setup(self, config, batch_size=None, epochs=None, data=None):
         
         import tensorflow as tf
         seed=42
         tf.random.set_seed(seed)
         np.random.seed(seed)
-        #===============set up dataset================
-        datapath = r'/uctgan/data/udelCT'
-        file_reference = r'./data/udelCT/File_reference.csv'
 
-        img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
-        self.train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
-
-        idx = 0
-        for file in img_ls:
-            img = sitk.ReadImage(file)
-            img = sitk.GetArrayFromImage(img)
-            img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
-            self.train_set[idx] = img
-            idx += 1
         #===============set up model================
         self.model = AAE(**config)
         self.checkpoint1 = tf.train.Checkpoint(model=self.model.autoencoder, optimizers=self.model.autoencoder.optimizer)
         self.checkpoint2 = tf.train.Checkpoint(model=self.model.generator2, optimizers=self.model.generator2.optimizer)
         self.checkpoint3 = tf.train.Checkpoint(model=self.model.discriminator2, optimizers=self.model.discriminator2.optimizer)
-
-        self.batch_size=16
-        self.n_epochs=5000
+        self.train_set=data
+        self.batch_size=batch_size
+        self.n_epochs=epochs
         seed=42
         tf.random.set_seed(seed)
         np.random.seed(seed)
 
         def train_step():
-            print(self.train_set.shape)
             x_idx_list = sample(range(self.train_set.shape[0]), self.batch_size)
             x_idx_list2 = sample(range(self.train_set.shape[0]), self.batch_size)
+            
             x = self.train_set[x_idx_list]
             x2 = self.train_set[x_idx_list2]
+            # x, x2 = self.train_set.take(2)
 
             autoencoder_history = self.model.autoencoder.train_on_batch(x,x)
             fake_latent = self.model.encoder.predict(x)
@@ -107,8 +96,30 @@ class AAETrainable(tune.Trainable):
     # sched = AsyncHyperBandScheduler(
     #     time_attr="training_iteration", max_t=400, grace_period=20)
 
+#===============set up dataset================
+datapath = r'/uctgan/data/udelCT'
+file_reference = r'./data/udelCT/File_reference.csv'
+
+img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
+train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
+
+idx = 0
+for file in img_ls:
+    img = sitk.ReadImage(file)
+    img = sitk.GetArrayFromImage(img)
+    img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
+    train_set[idx] = img
+    idx += 1
+
+# train_set = data_reader_np(train_set, 48, 16)
+
+def stopper(trial_id, result):
+    condition1 = result["AE_loss"]  < 0.005 or result["training_iteration"] > 2000
+    condition2 = result["training_iteration"] > 100 and result["AE_loss"]  > 1
+    return result["AE_loss"]  < 0.005 or result["training_iteration"] > 2000
+
 analysis = tune.run(
-    AAETrainable,
+    tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data=train_set),
     name="AAE_uct",
     metric="AE_loss",
     mode="min",
@@ -119,9 +130,8 @@ analysis = tune.run(
         "cpu": 3,
         "gpu": 1
     },
-    stop={"training_iteration": 200, "mean_accuracy": 0.005}, 
+    stop=stopper, 
     config = {
-                "batch_size":16,
                 "optimizer_generator_lr" : tune.loguniform(5e-6, 1e-3), 
                 "optimizer_generator_beta" : 0.5, 
                 "optimizer_discriminator_lr" : tune.loguniform(5e-6, 1e-3), 
@@ -129,5 +139,6 @@ analysis = tune.run(
                 "optimizer_autoencoder_lr" : tune.loguniform(5e-6, 1e-3), 
                 "optimizer_autoencoder_beta" : 0.9
             },
-    checkpoint_freq=1)
+    checkpoint_freq=1
+)
 print("Best hyperparameters found were: ", analysis.best_config)

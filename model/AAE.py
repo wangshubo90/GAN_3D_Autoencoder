@@ -291,5 +291,5 @@ if __name__=="__main__":
     seed=42
     np.random.seed(42)
 
-    # history = model.train(train_set, batch_size, n_epochs, len(img_ls))
-    print(model.train_step(train_set))
+    history = model.train(train_set, batch_size, n_epochs, len(img_ls))
+    #print(model.train_step(train_set))
