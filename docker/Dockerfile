@@ -8,7 +8,7 @@ ENV PYTORCH_LIGHTNING_VERSION=1.2.9
 ENV TORCHVISION_VERSION=0.9.1+cu111
 ENV CUDNN_VERSION=8.1.1.33-1+cuda11.2
 ENV NCCL_VERSION=2.8.4-1+cuda11.2
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
 
 ENV PYSPARK_PACKAGE=pyspark==3.1.1
 ENV SPARK_PACKAGE=spark-3.1.1/spark-3.1.1-bin-hadoop2.7.tgz
