@@ -9,15 +9,16 @@ from random import sample
 
 class AAE():
     #Adversarial Autoencoder
-    def __init__(self, img_shape=(48, 96, 96, 1), encoded_dim=32, hidden = (32,64,128,256),batch_size=16, epochs=5000, **kwargs):
+    def __init__(self, img_shape=(48, 96, 96, 1), encoded_dim=32, hidden = (32,64,128,256), batch_size=16, epochs=5000, **kwargs):
         self.encoded_dim = encoded_dim
         self.hidden=hidden
         self.batch_size=batch_size
         self.epochs=epochs
-        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=kwargs["optG_beta"])
-        self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=kwargs["optD_beta"])
-        self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=kwargs["optAE_beta"])
+        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]))
+        self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=tf.Variable(kwargs["optD_beta"]))
+        self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=tf.Variable(kwargs["optAE_beta"]))
         self.img_shape = img_shape
+        self.lastact=kwargs['act']
         self.initializer = RandomNormal(mean=0., stddev=1.)
         self.encoder, self.decoder, self.autoencoder, self.discriminator, \
                 self.discriminator2, self.generator, self.generator2 = self._modelCompile(
@@ -26,6 +27,7 @@ class AAE():
                 self.optimizer_discriminator,\
                 self.optimizer_generator
                 )
+        
 
     def _buildEncoder(self, img_shape, encoded_dim):
         hidden=self.hidden
@@ -94,7 +96,7 @@ class AAE():
         decoder.add(layers.BatchNormalization())
         decoder.add(Conv3DTranspose(filters=hidden[-4], kernel_size=3, strides=(2,)*3, padding="SAME", activation='relu'))
         decoder.add(layers.BatchNormalization())
-        decoder.add(Conv3DTranspose(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
+        decoder.add(Conv3DTranspose(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=self.lastact))
         
         return decoder
 
@@ -139,7 +141,9 @@ class AAE():
         discriminator.add(GlobalAvgPool3D())
         #discriminator.add(Conv3D(filters = 1, kernel_size=3, strides=(1,)*3, padding="SAME", activation='relu'))
         discriminator.add(Flatten())
+        discriminator.add(Dropout(0.3))
         discriminator.add(Dense(128, activation="relu"))
+        discriminator.add(Dropout(0.3))
         discriminator.add(Dense(1, activation="sigmoid"))
         
         return discriminator

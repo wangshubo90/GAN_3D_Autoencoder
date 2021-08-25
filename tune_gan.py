@@ -1,6 +1,7 @@
 #!/urs/bin/python3.7/python
 import os, glob
 import logging
+from ray.tune.suggest.variant_generator import grid_search
 
 from tensorflow.keras import optimizers
 from tensorflow.python.keras.callbacks import History
@@ -25,6 +26,7 @@ for gpu in gpus:
 
 from ray import tune
 from ray.tune.schedulers import AsyncHyperBandScheduler
+from ray.tune.callback import Callback
 
 from tensorflow.keras.optimizers import Adam
 from tensorflow import keras
@@ -72,7 +74,8 @@ class AAETrainable(tune.Trainable):
 
             discriminator2_history = self.model.discriminator2.train_on_batch(discriminator2_input, discriminator2_labels)
             generator2_history = self.model.generator2.train_on_batch(x, np.ones((self.batch_size, 1)))
-
+            
+            
             return {
                         'AE_loss':autoencoder_history, 
                         'D_loss':discriminator2_history, 
@@ -86,6 +89,7 @@ class AAETrainable(tune.Trainable):
         return history
 
     def save_checkpoint(self, checkpoint_dir):
+        self.model.autoencoder.save(os.path.join(checkpoint_dir,"AE.h5"))
         self.checkpoint1.save(checkpoint_dir)
         # self.checkpoint2save(checkpoint_dir+"_G")
         # self.checkpoint3.save(checkpoint_dir+"_D")
@@ -108,7 +112,7 @@ val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
 train_set = np.zeros(shape=[len(train_img), 48, 96, 96, 1])
 
 idx = 0
-for file in img_ls:
+for file in train_img:
     img = sitk.ReadImage(file)
     img = sitk.GetArrayFromImage(img)
     img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
@@ -119,34 +123,41 @@ for file in img_ls:
 
 def stopper(trial_id, result):
     conditions = [
-        result["AE_loss"]  < 0.005 or result["training_iteration"] > 2000,
+        result["AE_loss"]  < 0.001 or result["training_iteration"] > 1000,
         result["AE_loss"]  > 1 and result["training_iteration"] > 250 ,
-        result["AE_loss"]  > 0.2 and result["training_iteration"] > 500 
+        result["AE_loss"]  > 0.2 and result["training_iteration"] > 500 ,
     ]
     return reduce(lambda x,y: x or y, conditions)
 
+class MyCallback(Callback):
+    def on_trial_complete(self, iteration, trials, trial, result, **info):
+        print(f"Got result: {result['metric']}")
+
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=12, epochs=5000, data=train_set),
-    name="AAE_uct",
+    name="AAE_uct_test",
     metric="AE_loss",
     mode="min",
     local_dir="/uctgan/data/ray_results",
     verbose=1,
-    num_samples=10,
+    num_samples=6,
     resources_per_trial={
         "cpu": 3,
         "gpu": 1
     },
     stop=stopper, 
     config = {
-                "optG_lr" : tune.loguniform(5e-6, 1e-3), 
+                "hidden":(32,64,128,256),
+                "optG_lr" : tune.loguniform(5e-6, 1e-4), 
                 "optG_beta" : 0.5, 
-                "optD_lr" : tune.loguniform(5e-6, 1e-3), 
+                "optD_lr" : tune.sample_from(lambda spec: spec.config.optG_lr/np.random.randint(5, 20)), 
                 "optD_beta" : 0.5,
-                "optAE_lr" : tune.loguniform(5e-6, 1e-3), 
-                "optAE_beta" : 0.9
+                "optAE_lr" : 0.0005, 
+                "optAE_beta" : 0.9,
+                "act": "relu"
             },
-    checkpoint_freq=1,
+    checkpoint_freq=50,
+    checkpoint_at_end=True,
     fail_fast=True
 )
 print("Best hyperparameters found were: ", analysis.best_config)

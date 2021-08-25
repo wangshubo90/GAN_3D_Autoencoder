@@ -17,7 +17,7 @@ docker save -o <path for generated tar file> <image name>
 docker load -i <path to image tar file>
 
 # tag an image 
-docker tag DESIREDIMAGEID mycompany/myreponame
+docker tag DESIREDIMAGEID mycompany/myreponame:tag
 
 # commit an image
 docker commit [OPTIONS] CONTAINER [REPOSITORY[:TAG]] --change <commands> --pause <true|false>
