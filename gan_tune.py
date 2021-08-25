@@ -48,11 +48,11 @@ class AAETrainable(tune.Trainable):
 
         #===============set up model================
         self.model = AAE(**config)
-        self.checkpoint1 = tf.train.Checkpoint(model=self.model.autoencoder, optimizers=self.model.autoencoder.optimizer)
-        self.checkpoint2 = tf.train.Checkpoint(model=self.model.generator2, optimizers=self.model.generator2.optimizer)
-        self.checkpoint3 = tf.train.Checkpoint(model=self.model.discriminator2, optimizers=self.model.discriminator2.optimizer)
+        self.checkpoint = tf.train.Checkpoint(AE=self.model.autoencoder, AEoptimizers=self.model.autoencoder.optimizer,
+            GeneratorExit=self.model.generator2, Goptimizers=self.model.generator2.optimizer,
+            D=self.model.discriminator2, Doptimizers=self.model.discriminator2.optimizer)
         self.train_set=data["train"]
-        self.train_set=data["val"]
+        self.val_set=data["val"]
         self.batch_size=batch_size
         self.n_epochs=epochs
         seed=42
@@ -148,7 +148,7 @@ class MyCallback(Callback):
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=12, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="AAE_uct_test2",
+    name="AAE_uct_test3",
     metric="val_loss",
     mode="min",
     local_dir="/uctgan/data/ray_results",
