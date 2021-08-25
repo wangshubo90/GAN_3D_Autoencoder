@@ -5,8 +5,8 @@ from model.AAE import AAE
 import matplotlib.pyplot as plt
 import SimpleITK as sitk 
 
-checkpoint_dir = "/uctgan/data/ray_results/AAE_uct_test/AAETrainable_70a1a_00000_0_optD_lr=7.5963e-07,optG_lr=9.8752e-06_2021-08-24_04-19-14"
-checkpoint = "checkpoint_000128-128"
+checkpoint_dir = "/uctgan/data/ray_results/AAE_uct_test2/AAETrainable_16ccf_00002_2_optD_lr=3.3526e-06,optG_lr=1.6763e-05_2021-08-25_00-47-57"
+checkpoint = "checkpoint_002479"
 param = "params.json"
 config = json.load(open(os.path.join(checkpoint_dir, param)))
 
@@ -22,7 +22,7 @@ model.autoencoder.load_weights("/uctgan/data/ray_results/AAE_uct_test/AAETrainab
 datapath = r'/uctgan/data/udelCT'
 file_reference = r'./data/udelCT/File_reference.csv'
 img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
-image = sitk.GetArrayFromImage(sitk.ReadImage(img_ls[-9]))
+image = sitk.GetArrayFromImage(sitk.ReadImage(img_ls[-12]))
 image= image[:, 2:98, 2:98].reshape((1,48,96,96,1))
 gen_image=np.squeeze(model.autoencoder.predict(image.astype(np.float32)/255)) * 255
 image = np.squeeze(image)
