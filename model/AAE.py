@@ -9,11 +9,13 @@ from random import sample
 
 class AAE():
     #Adversarial Autoencoder
-    def __init__(self, img_shape=(48, 96, 96, 1), encoded_dim=32, hidden = (32,64,128,256), batch_size=16, epochs=5000, **kwargs):
+    def __init__(self, img_shape=(48, 96, 96, 1), encoded_dim=32, loss="mse", acc="mse", hidden = (32,64,128,256), batch_size=16, epochs=5000, **kwargs):
         self.encoded_dim = encoded_dim
         self.hidden=hidden
         self.batch_size=batch_size
         self.epochs=epochs
+        self.loss_function = loss
+        self.acc_function = acc
         self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]))
         self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=tf.Variable(kwargs["optD_beta"]))
         self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=tf.Variable(kwargs["optAE_beta"]))
@@ -157,7 +159,7 @@ class AAE():
         decoder_input=Input(shape=encoded_dim)
         
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
-        autoencoder.compile(optimizer=optimizer_autoencoder, loss="mse")
+        autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_func)
         
         discriminator = None
         generator = None
@@ -171,9 +173,9 @@ class AAE():
         discriminator2 = self._buildDiscriminator2(img_shape)
         discriminator2.trainable = False
         generator2=Model(autoencoder_input, discriminator2(autoencoder(autoencoder_input)))
-        generator2.compile(optimizer=optimizer_generator, loss="mse")
+        generator2.compile(optimizer=optimizer_generator, loss=self.loss_func)
         discriminator2.trainable = True
-        discriminator2.compile(optimizer=optimizer_discriminator, loss="mse")
+        discriminator2.compile(optimizer=optimizer_discriminator, loss=self.loss_func)
         
         return encoder, decoder, autoencoder, discriminator, discriminator2, generator, generator2
 

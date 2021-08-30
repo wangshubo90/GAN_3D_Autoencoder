@@ -16,6 +16,8 @@ class AAE():
     def __init__(self, 
                 img_shape=(48, 96, 96, 1), 
                 encoded_dim=16, 
+                loss = "mse", 
+                acc = "mse",
                 optimizer_generator = SGD(0.001, momentum=.9), 
                 optimizer_discriminator = SGD(0.0001, momentum=.9), 
                 optimizer_autoencoder = Adam(0.0001)):
