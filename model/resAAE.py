@@ -1,7 +1,6 @@
 #!/home/spl/ml/sitk/bin/python
 import numpy as np
-from random import sample, seed
-from tqdm import tqdm
+from random import sample
 import tensorflow as tf 
 from tensorflow import keras
 from tensorflow.keras import layers, Sequential, Model
@@ -11,16 +10,15 @@ from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
 from utils.layers import *
 
-class AAE():
+class resAAE():
     #Adversarial Autoencoder
     def __init__(self, 
                 img_shape=(48, 96, 96, 1), 
                 encoded_dim=16, 
                 loss = "mse", 
                 acc = "mse",
-                optimizer_generator = SGD(0.001, momentum=.9), 
-                optimizer_discriminator = SGD(0.0001, momentum=.9), 
-                optimizer_autoencoder = Adam(0.0001)):
+                hidden = (32,64,128,256),
+                batch_size=16, epochs=5000, **kwargs):
         self.encoded_dim = encoded_dim
         self.optimizer_generator = optimizer_generator
         self.optimizer_discriminator = optimizer_discriminator
@@ -116,7 +114,7 @@ class AAE():
         
         return self.history
 
-    def train_on_batch():
+    def train_step():
         return
 
     def load_model(self):
@@ -132,6 +130,9 @@ class AAE():
         return
 
 if __name__ == "__main__":
+    from tqdm import tqdm
+
+
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
     try:
         tf.config.experimental.set_memory_growth(physical_devices[0], True)
