@@ -138,7 +138,7 @@ def resTP_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding 
     x = x + identity
     x = activate(x)
 
-    return
+    return x
     
 if __name__=="__main__":
 

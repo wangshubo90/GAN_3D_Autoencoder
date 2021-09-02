@@ -1,6 +1,8 @@
 #!/home/spl/ml/sitk/bin/python
 import numpy as np
 from random import sample, seed
+from tensorflow.python.keras.layers.core import Dropout
+from tensorflow.python.keras.layers.pooling import GlobalAveragePooling3D
 from tqdm import tqdm
 import tensorflow as tf 
 from tensorflow import keras
@@ -34,34 +36,58 @@ class AAE():
                 self.optimizer_generator
                 )
 
-    def _buildEncoder(self, img_shape, encoded_dim):
+    def _buildEncoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu):
         
-        input = Input(shape=(48, 96, 96, 1))
-        x = Conv3D(filters=16, kernel_size=5, strides=(2,2,2), padding="SAME")(input)
+        input = Input(shape=input_shape)
+        x = Conv3D(filters=filters[0], kernel_size=5, strides=(2,2,2), padding="SAME")(input)
         x = BatchNormalization()(x)
         x = relu(x)
-        x = residual_block(x, filters = 32, kernel_size= 3,  
-                    strides = (2,2,2), padding = "SAME", activate=relu)
-        x = residual_block(x, filters = 64, kernel_size= 3,  
-                    strides = (2,2,2), padding = "SAME", activate=relu)
-        x = residual_block(x, filters = 128, kernel_size= 3,  
-                    strides = (2,2,2), padding = "SAME", activate=relu)
+        for i, ft in enumerate(filters[1:]):
+            if i == len(filters[1:])-1:
+                x = residual_block(x, filters = ft, kernel_size= 3,  
+                            strides = (2,2,2), padding = "SAME", activate=relu)
+            else:
+                x = residual_block(x, filters = ft, kernel_size= 3,  
+                            strides = (2,2,2), padding = "SAME", activate=last_activation)
         
         encoder = Model(inputs=input, outputs=x)        
         return encoder
      
-    def _buildDecoder(self, encoded_dim):
-
-        input = Input(shape = (3, 12, 12))
+    def _buildDecoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu):
+        input = Input(shape=input_shape)
+        x = Conv3DTranspose(filters=filters[-1], kernel_size=3, strides=(2,)*3, padding="SAME", activation='relu')(input)
+        x = BatchNormalization()(x)
+        for i, ft in enumerate(filters[-2::-1]):
+            if i != len(filters[-2::-1])-1:
+                x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME")
+            else:
+                x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME", activation=last_activation)
+        x = x[:, :15, 2:62, 2:62, :]
+        decoder = Model(inputs=input, outputs=x)
         return decoder
 
-    def _buildDiscriminator(self, encoded_dim):
+    def _buildDiscriminator(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu):
 
-        discriminator = Sequential()
-        discriminator.add(Dense(1024, input_dim=encoded_dim, activation="relu"))
-        discriminator.add(Dense(256, activation="relu"))
-        discriminator.add(Dense(64, activation="relu"))
-        discriminator.add(Dense(1, activation="sigmoid"))
+        input = Input(shape=input_shape)
+        x = Conv3D(filters=filters[0], kernel_size=5, strides=(2,2,2), padding="SAME")(input)
+        x = BatchNormalization()(x)
+        x = relu(x)
+        for i, ft in enumerate(filters[1:]):
+            if i == len(filters[1:])-1:
+                x = residual_block(x, filters = ft, kernel_size= 3,  
+                            strides = (2,2,2), padding = "SAME", activate=relu)
+            else:
+                x = residual_block(x, filters = ft, kernel_size= 3,  
+                            strides = (2,2,2), padding = "SAME", activate=last_activation)
+        
+        x = GlobalAveragePooling3D()(x)
+        x = Flatten()(x)
+        x = Dense(128)(x)
+        x = Dropout(0.7)(x)
+        x = Dense(128)(x)
+        x = Dropout(0.7)(x)
+        x = Dense(1)(x)
+        discriminator = Model(inputs=input, outputs=x) 
 
         return discriminator
 
