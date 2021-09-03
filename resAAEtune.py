@@ -59,7 +59,7 @@ np.random.seed(42)
 
 history = model.train(train_set, batch_size, n_epochs, len(img_ls))
 
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots(2, 2, figsize=(16,12))
 
