@@ -1,4 +1,6 @@
 #!/home/spl/ml/sitk/bin/python
+import os
+os.environ["PYTHONPATH"] = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\GAN_autoencoder"
 import numpy as np
 from random import sample, seed
 from tensorflow.python.keras.layers.core import Dropout
@@ -8,7 +10,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Sequential, Model
 from tensorflow.keras.layers import Dense, Conv3D, Conv1D, Conv3DTranspose, Flatten, Reshape, Input, BatchNormalization
-from tensorflow.keras.activations import relu
+from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
 from utils.layers import *
@@ -18,15 +20,29 @@ class resAAE():
     def __init__(self, 
                 img_shape=(48, 96, 96, 1), 
                 encoded_dim=16, 
-                loss = "mse", 
+                loss_AE = "mse", 
+                loss_GD = "mse",
                 acc = "mse",
                 hidden = (32,64,128,256),
-                batch_size=16, epochs=5000, **kwargs):
+                output_slices=None,
+                batch_size=16, epochs=5000,
+                last_encoder_act=relu,
+                last_decoder_act=sigmoid,
+                **kwargs):
         self.encoded_dim = encoded_dim
-        self.optimizer_generator = optimizer_generator
-        self.optimizer_discriminator = optimizer_discriminator
-        self.optimizer_autoencoder = optimizer_autoencoder
+        self.hidden=hidden
+        self.batch_size=batch_size
+        self.epochs=epochs
+        self.loss_function_AE = loss_AE
+        self.loss_function_GD = loss_GD
+        self.acc_function = acc
+        self.output_slices=output_slices
+        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]))
+        self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=tf.Variable(kwargs["optD_beta"]))
+        self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=tf.Variable(kwargs["optAE_beta"]))
         self.img_shape = img_shape
+        self.last_encoder_act=last_encoder_act
+        self.last_decoder_act=last_encoder_act
         self.initializer = RandomNormal(mean=0., stddev=1.)
         self.encoder, self.decoder, self.autoencoder, self.discriminator, self.generator = self._modelCompile(
                 self.img_shape, self.encoded_dim, \
@@ -52,16 +68,23 @@ class resAAE():
         encoder = Model(inputs=input, outputs=x)        
         return encoder
      
-    def _buildDecoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu):
+    def _buildDecoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu, **kwargs):
         input = Input(shape=input_shape)
-        x = Conv3DTranspose(filters=filters[-1], kernel_size=3, strides=(2,)*3, padding="SAME", activation='relu')(input)
-        x = BatchNormalization()(x)
-        for i, ft in enumerate(filters[-2::-1]):
+        x = input
+        for i, ft in enumerate(filters[-1:0:-1]):
             if i != len(filters[-2::-1])-1:
                 x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME")
             else:
-                x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME", activation=last_activation)
-        x = x[:, :15, 2:62, 2:62, :]
+                x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME", activation="relu")
+        
+        x = Conv3DTranspose(filters=filters[0], kernel_size=3, strides=(2,)*3, padding="SAME", activation="relu")(x)
+        x = BatchNormalization()(x)
+        
+        if "slices" in kwargs:
+            slices = kwargs["slices"]
+            x = x[slices]
+
+        x = Conv3DTranspose(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=last_activation)(x)
         decoder = Model(inputs=input, outputs=x)
         return decoder
 
@@ -85,29 +108,32 @@ class resAAE():
         x = Dropout(0.7)(x)
         x = Dense(128)(x)
         x = Dropout(0.7)(x)
-        x = Dense(1)(x)
+        x = Dense(1, activation=last_activation)(x)
         discriminator = Model(inputs=input, outputs=x) 
 
         return discriminator
 
-    def _modelCompile(self, img_shape, encoded_dim, optimizer_autoencoder, optimizer_discriminator, optimizer_generator):
+    def _modelCompile(self, input_shape, encoded_dim, optimizer_autoencoder, optimizer_discriminator, optimizer_generator):
 
-        encoder=self._buildEncoder(img_shape, encoded_dim)
-        decoder=self._buildDecoder(encoded_dim)
+        encoder=self._buildEncoder(input_shape, filters=self.hidden, last_activation=self.last_encoder_act)
+        decoder=self._buildDecoder(encoder.output_shape[1:], filters=self.hidden, last_activation=self.last_decoder_act, slices=self.output_slices)
         
-        autoencoder_input = Input(shape = img_shape)
+        autoencoder_input = Input(shape = input_shape)
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
-        autoencoder.compile(optimizer=optimizer_autoencoder, loss="mse")
-
-        discriminator=self._buildDiscriminator(encoded_dim)
+        autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE)
+        #assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
+        discriminator=self._buildDiscriminator(input_shape, filters=self.hidden, last_activation=self.last_decoder_act)
         discriminator.trainable = False
-        generator = Model(autoencoder_input, discriminator(encoder(autoencoder_input)))
-        generator.compile(optimizer=optimizer_generator, loss="binary_crossentropy")
+        generator = Model(autoencoder_input, discriminator(decoder(encoder(autoencoder_input))))
+        generator.compile(optimizer=optimizer_generator, loss=self.loss_function_GD)
         discriminator.trainable = True
-        discriminator.compile(optimizer=optimizer_discriminator, loss="binary_crossentropy")
+        discriminator.compile(optimizer=optimizer_discriminator, loss=self.loss_function_GD)
     
 
         return encoder, decoder, autoencoder, discriminator, generator
+
+    def train_step():
+        return
 
     def train(self, train_set, batch_size, n_epochs, n_sample):
 
@@ -141,9 +167,6 @@ class resAAE():
         
         return self.history
 
-    def train_step():
-        return
-
     def load_model(self):
 
         return
@@ -158,7 +181,7 @@ class resAAE():
 
 if __name__ == "__main__":
     from tqdm import tqdm
-
+    
 
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
     try:
@@ -167,50 +190,67 @@ if __name__ == "__main__":
     # Invalid device or cannot modify virtual devices once initialized.
         pass
 
-    model = AAE()
+    config={
+        "optG_lr":0.01,
+        "optG_beta":0.01,
+        "optD_lr":0.01,
+        "optD_beta":0.01,
+        "optAE_lr":0.01,
+        "optAE_beta":0.01,
+        "img_shape": (15, 60, 60, 1), 
+        "encoded_dim": 16, 
+        "loss": "mse", 
+        "acc": "mse",
+        "hidden": (16, 32, 64, 128),
+        "output_slices": [slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)],
+        "batch_size": 16,
+        "epochs": 5000
+    }
+
+    model = resAAE(**config)
     
-    import os
-    import SimpleITK as sitk 
+    # import os
+    # import SimpleITK as sitk 
 
-    datapath = r'../Data'
-    file_reference = r'../training/File_reference.csv'
+    # datapath = r'../Data'
+    # file_reference = r'../training/File_reference.csv'
 
-    img_ls = os.listdir(datapath)
-    train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
+    # img_ls = os.listdir(datapath)
+    # train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
 
-    idx = 0
-    for file in tqdm(img_ls):
-        img = sitk.ReadImage(os.path.join(datapath, file))
-        img = sitk.GetArrayFromImage(img)
-        img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
-        train_set[idx] = img
-        idx += 1
+    # idx = 0
+    # for file in tqdm(img_ls):
+    #     img = sitk.ReadImage(os.path.join(datapath, file))
+    #     img = sitk.GetArrayFromImage(img)
+    #     img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
+    #     train_set[idx] = img
+    #     idx += 1
 
-    model = AAE(encoded_dim=128)
+    # model = AAE(encoded_dim=128)
 
-    batch_size=12
-    n_epochs=3000
-    seed=42
-    np.random.seed(42)
+    # batch_size=12
+    # n_epochs=3000
+    # seed=42
+    # np.random.seed(42)
 
-    history = model.train(train_set, batch_size, n_epochs, len(img_ls))
+    # history = model.train(train_set, batch_size, n_epochs, len(img_ls))
 
-    import matplotlib as plt
+    # import matplotlib as plt
 
-    fig, ax = plt.subplots(2, 2, figsize=(16,12))
+    # fig, ax = plt.subplots(2, 2, figsize=(16,12))
 
-    ax[0].plot(range(2999), history["AE_loss"], label="AE_loss")
-    ax[0].title("AE_loss")
+    # ax[0].plot(range(2999), history["AE_loss"], label="AE_loss")
+    # ax[0].title("AE_loss")
 
-    fig, ax = plt.subplots(2,2)
+    # fig, ax = plt.subplots(2,2)
 
-    ax[0, 0].plot(range(2999), history["AE_loss"], label="AE_loss")
-    ax[0, 0].set_title("AE_loss")
+    # ax[0, 0].plot(range(2999), history["AE_loss"], label="AE_loss")
+    # ax[0, 0].set_title("AE_loss")
 
-    ax[0, 1].plot(range(2999), history["G_loss"], label="G_loss")
-    ax[0, 1].set_title("G_loss")
+    # ax[0, 1].plot(range(2999), history["G_loss"], label="G_loss")
+    # ax[0, 1].set_title("G_loss")
 
-    ax[1, 0].plot(range(2999), history["D_loss"], label="D_loss")
-    ax[1, 0].set_title("D_loss")
+    # ax[1, 0].plot(range(2999), history["D_loss"], label="D_loss")
+    # ax[1, 0].set_title("D_loss")
 
-    plt.show()
+    # plt.show()
