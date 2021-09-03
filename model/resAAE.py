@@ -131,8 +131,30 @@ class resAAE():
 
         return encoder, decoder, autoencoder, discriminator, generator
 
-    def train_step():
-        return
+    def train_step(self, train_set, batch_size):
+        x_idx_list = sample(range(train_set.shape[0]), batch_size)
+        x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
+        x = train_set[x_idx_list]
+        x2 = train_set[x_idx_list2]
+
+        autoencoder_history = self.autoencoder.train_on_batch(x,x)
+        fake_latent = self.encoder.predict(x)
+        fake_image = self.decoder.predict(fake_latent)
+        discriminator_input = np.concatenate((fake_image, x2))
+        discriminator_labels = np.concatenate((np.zeros((self.batch_size, 1)), np.ones((self.batch_size, 1))))
+
+        discriminator_history = self.discriminator.train_on_batch(discriminator_input, discriminator_labels)
+        generator_history = self.generator.train_on_batch(x, np.ones((self.batch_size, 1)))
+
+        val_x = self.val_set[sample(range(self.val_set.shape[0]), self.batch_size*2)]
+        val_loss = self.model.autoencoder.test_on_batch(val_x, val_x, reset_metrics=True, return_dict=False)
+
+        return {
+                    'AE_loss':autoencoder_history, 
+                    'D_loss':discriminator_history, 
+                    'G2_loss':generator_history,
+                    'val_loss':val_loss
+                }
 
     def train(self, train_set, batch_size, n_epochs, n_sample):
 
