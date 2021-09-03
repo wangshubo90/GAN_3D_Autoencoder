@@ -1,6 +1,4 @@
 #!/home/spl/ml/sitk/bin/python
-import os
-os.environ["PYTHONPATH"] = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\GAN_autoencoder"
 import numpy as np
 from random import sample, seed
 from tensorflow.python.keras.layers.core import Dropout
@@ -79,7 +77,7 @@ class resAAE():
         
         x = Conv3DTranspose(filters=filters[0], kernel_size=3, strides=(2,)*3, padding="SAME", activation="relu")(x)
         x = BatchNormalization()(x)
-        
+
         if "slices" in kwargs:
             slices = kwargs["slices"]
             x = x[slices]
@@ -120,6 +118,7 @@ class resAAE():
         
         autoencoder_input = Input(shape = input_shape)
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
+        assert autoencoder.input_shape == autoencoder.output_shape
         autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE)
         #assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
         discriminator=self._buildDiscriminator(input_shape, filters=self.hidden, last_activation=self.last_decoder_act)
@@ -147,7 +146,8 @@ class resAAE():
 
             autoencoder_history = self.autoencoder.train_on_batch(x,x)
             fake_latent = self.encoder.predict(x)
-            discriminator_input = np.concatenate((fake_latent, np.random.randn(batch_size, self.encoded_dim)))
+            fake_image = self.decoder.predict(fake_latent)
+            discriminator_input = np.concatenate((fake_image, x))
             discriminator_labels = np.concatenate((np.zeros((batch_size, 1)), np.ones((batch_size, 1))))
             
             discriminator_history = self.discriminator.train_on_batch(discriminator_input, discriminator_labels)
@@ -157,12 +157,22 @@ class resAAE():
             discriminator_losses.append(discriminator_history)
             generator_losses.append(generator_history)
 
-            if epoch % 50 == 0:
-                self.autoencoder.save("./train_log/autoencoder_epoch_{}.h5".format(epoch))
-                self.discriminator.save("./train_log/autoencoder_epoch_{}.h5".format(epoch))
+            if epoch == 1:
+                loss_min = autoencoder_history
+                loss_min_epoch = 1
+            
+            if epoch > 5 and autoencoder_history < loss_min:
+                loss_min = autoencoder_history
+                loss_min_epoch = epoch
+                self.autoencoder.save("../GAN_log/autoencoder_epoch_{}.h5".format(epoch))
+                #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
+                
+            
             print("Epoch--{}".format(epoch))
-            print("AE_loss: {:.4f}  D_loss:{:.3f}   G_loss:{:.3f}".format(autoencoder_history, discriminator_history, generator_history))
-
+            print("AE_loss: {:.4f}  AE_loss_min: {:.4f}  D_loss:{:.3f}   G_loss:{:.3f}".format(
+                autoencoder_history, loss_min, discriminator_history, generator_history
+                )
+            )
         self.history = {'AE_loss':autoencoder_losses, 'D_loss':discriminator_losses, 'G_loss':generator_losses}
         
         return self.history
