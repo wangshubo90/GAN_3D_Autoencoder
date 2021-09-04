@@ -6,74 +6,13 @@ from ray.tune.suggest.variant_generator import grid_search
 from tensorflow.keras import optimizers
 from tensorflow.python.keras.callbacks import History
 #================ Environment variables ================
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-os.environ['AUTOGRAPH_VERBOSITY'] = '3'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' 
+os.environ['AUTOGRAPH_VERBOSITY'] = '1'
 import tensorflow as tf
-tf.autograph.set_verbosity(3)
+tf.autograph.set_verbosity(1)
 tf.get_logger().setLevel(logging.ERROR)
 
-<<<<<<< HEAD
-from tqdm import tqdm
-
-
-physical_devices = tf.config.experimental.list_physical_devices('GPU')
-try:
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
-except:
-# Invalid device or cannot modify virtual devices once initialized.
-    pass
-
-config={
-    "optG_lr":0.0002,
-    "optG_beta":0.5,
-    "optD_lr":0.0001,
-    "optD_beta":0.5,
-    "optAE_lr":0.001,
-    "optAE_beta":0.9,
-    "img_shape": (48, 96, 96, 1), 
-    "encoded_dim": 16, 
-    "loss": "mse", 
-    "acc": "mse",
-    "hidden": (16, 32, 64, 128),
-    "output_slices": slice(None),
-    "batch_size": 16,
-    "epochs": 5000
-}
-#[slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)]
-model = resAAE(**config)
-    
-datapath = r'../Data'
-file_reference = r'../Training/File_reference.csv'
-
-img_ls = os.listdir(datapath)
-train_set = np.zeros(shape=[len(img_ls), 48, 96, 96, 1])
-
-idx = 0
-for file in tqdm(img_ls):
-    img = sitk.ReadImage(os.path.join(datapath, file))
-    img = sitk.GetArrayFromImage(img)
-    img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
-    train_set[idx] = img
-    idx += 1
-
-batch_size=12
-n_epochs=1000
-seed=42
-np.random.seed(42)
-
-history = model.train(train_set, batch_size, n_epochs, len(img_ls))
-
-import matplotlib.pyplot as plt
-
-fig, ax = plt.subplots(2, 2, figsize=(16,12))
-
-ax[0].plot(range(2999), history["AE_loss"], label="AE_loss")
-ax[0].title("AE_loss")
-
-fig, ax = plt.subplots(2,2)
-=======
 # import horovod.tensorflow as hvd
->>>>>>> 23e44c830f6b30f3c92e4f16fc9a7f360944f8b2
 
 #======================= Set up Horovod ======================
 # comment out this chunk of code if you train with 1 gpu
@@ -92,7 +31,7 @@ from ray.tune.callback import Callback
 from tensorflow.keras.optimizers import Adam
 from tensorflow import keras
 import SimpleITK as sitk
-from model.AAE import AAE
+from model.resAAE import resAAE
 import numpy as np
 from random import sample
 from datapipeline.aae_reader import data_reader_np
@@ -108,10 +47,10 @@ class AAETrainable(tune.Trainable):
         np.random.seed(seed)
 
         #===============set up model================
-        self.model = AAE(**config)
+        self.model = resAAE(**config)
         self.checkpoint = tf.train.Checkpoint(AE=self.model.autoencoder, AEoptimizers=self.model.autoencoder.optimizer,
-            GeneratorExit=self.model.generator2, Goptimizers=self.model.generator2.optimizer,
-            D=self.model.discriminator2, Doptimizers=self.model.discriminator2.optimizer)
+            G=self.model.generator, Goptimizers=self.model.generator.optimizer,
+            D=self.model.discriminator, Doptimizers=self.model.discriminator.optimizer)
         self.train_set=data["train"]
         self.val_set=data["val"]
         self.batch_size=batch_size

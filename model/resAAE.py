@@ -119,7 +119,7 @@ class resAAE():
         autoencoder_input = Input(shape = input_shape)
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
         assert autoencoder.input_shape == autoencoder.output_shape
-        autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE)
+        autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE, metrics=self.acc_function)
         #assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
         discriminator=self._buildDiscriminator(input_shape, filters=self.hidden, last_activation=self.last_decoder_act)
         discriminator.trainable = False
@@ -130,10 +130,10 @@ class resAAE():
     
 
         return encoder, decoder, autoencoder, discriminator, generator
-
-    def train_step(self, train_set, batch_size):
-        x_idx_list = sample(range(train_set.shape[0]), batch_size)
-        x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
+    
+    def train_step(self, train_set, val_set):
+        x_idx_list = sample(range(train_set.shape[0]), self.batch_size)
+        x_idx_list2 = sample(range(train_set.shape[0]), self.batch_size)
         x = train_set[x_idx_list]
         x2 = train_set[x_idx_list2]
 
@@ -146,15 +146,19 @@ class resAAE():
         discriminator_history = self.discriminator.train_on_batch(discriminator_input, discriminator_labels)
         generator_history = self.generator.train_on_batch(x, np.ones((self.batch_size, 1)))
 
-        val_x = self.val_set[sample(range(self.val_set.shape[0]), self.batch_size*2)]
-        val_loss = self.model.autoencoder.test_on_batch(val_x, val_x, reset_metrics=True, return_dict=False)
+        val_x = val_set[sample(range(val_set.shape[0]), self.batch_size*2)]
+        val_loss, val_acc = self.autoencoder.test_on_batch(val_x, val_x, reset_metrics=True, return_dict=False)
 
-        return {
-                    'AE_loss':autoencoder_history, 
+        history = {
+                    'AE_loss':autoencoder_history[0],
+                    'AE_acc':autoencoder_history[1],
                     'D_loss':discriminator_history, 
                     'G2_loss':generator_history,
-                    'val_loss':val_loss
+                    'val_loss':val_loss,
+                    "val_acc":val_acc
                 }
+        
+        return history
 
     def train(self, train_set, batch_size, n_epochs, n_sample):
 

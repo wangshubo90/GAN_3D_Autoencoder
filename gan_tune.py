@@ -6,10 +6,10 @@ from ray.tune.suggest.variant_generator import grid_search
 from tensorflow.keras import optimizers
 from tensorflow.python.keras.callbacks import History
 #================ Environment variables ================
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-os.environ['AUTOGRAPH_VERBOSITY'] = '3'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' 
+os.environ['AUTOGRAPH_VERBOSITY'] = '1'
 import tensorflow as tf
-tf.autograph.set_verbosity(3)
+tf.autograph.set_verbosity(1)
 tf.get_logger().setLevel(logging.ERROR)
 
 # import horovod.tensorflow as hvd
