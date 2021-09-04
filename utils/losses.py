@@ -17,7 +17,7 @@ def focalSoftMSE(y_true, y_pred, alpha=0.1, beta=10.0):
 def focalImageLoss(y_true, y_pred, threshold):
     return
 
-def focalMSE(y_true, y_pred, alpha=1.0, gamma=5.0):
+def focalMSE(y_true, y_pred, alpha=0.1, gamma=2.0):
     """
     Description: focal MSE loss
     """
@@ -34,7 +34,7 @@ def meanGradientError(y_true, y_pred):
 
     return tf.reduce_mean(mge)
 
-def mixedGradeintError(y_true, y_pred, alpha=0.5):
+def mixedGradeintError(y_true, y_pred, alpha=0.001):
     """
     Description: Mixed gradient error
     """

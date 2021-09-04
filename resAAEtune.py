@@ -2,12 +2,12 @@
 import os, glob
 import logging
 from ray.tune.suggest.variant_generator import grid_search
-
-from tensorflow.keras import optimizers
-from tensorflow.python.keras.callbacks import History
+import tensorflow as tf
 #================ Environment variables ================
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' 
 os.environ['AUTOGRAPH_VERBOSITY'] = '1'
+from tensorflow.keras import optimizers
+from tensorflow.python.keras.callbacks import History
 import tensorflow as tf
 tf.autograph.set_verbosity(1)
 tf.get_logger().setLevel(logging.ERROR)
@@ -37,6 +37,7 @@ from random import sample
 from datapipeline.aae_reader import data_reader_np
 from functools import reduce
 from sklearn.model_selection import train_test_split
+from utils.losses import *
 
 class AAETrainable(tune.Trainable):
     def setup(self, config, batch_size=None, epochs=None, data=None):
@@ -60,31 +61,9 @@ class AAETrainable(tune.Trainable):
         np.random.seed(seed)
 
         def train_step():
-            x_idx_list = sample(range(self.train_set.shape[0]), self.batch_size)
-            x_idx_list2 = sample(range(self.train_set.shape[0]), self.batch_size)
-            
-            x = self.train_set[x_idx_list]
-            x2 = self.train_set[x_idx_list2]
-            # x, x2 = self.train_set.take(2)
+            history = self.model.train_step(self.train_set, self.val_set, self.batch_size)
+            return history
 
-            autoencoder_history = self.model.autoencoder.train_on_batch(x,x)
-            fake_latent = self.model.encoder.predict(x)
-            fake_image = self.model.decoder.predict(fake_latent)
-            discriminator2_input = np.concatenate((fake_image, x2))
-            discriminator2_labels = np.concatenate((np.zeros((self.batch_size, 1)), np.ones((self.batch_size, 1))))
-
-            discriminator2_history = self.model.discriminator2.train_on_batch(discriminator2_input, discriminator2_labels)
-            generator2_history = self.model.generator2.train_on_batch(x, np.ones((self.batch_size, 1)))
-            
-            val_x = self.val_set[sample(range(self.val_set.shape[0]), self.batch_size*2)]
-            val_loss = self.model.autoencoder.test_on_batch(val_x, val_x, reset_metrics=True, return_dict=False)
-
-            return {
-                        'AE_loss':autoencoder_history, 
-                        'D_loss':discriminator2_history, 
-                        'G2_loss':generator2_history,
-                        'val_loss':val_loss
-                    }
         self.val_loss = 0.02
         self.currentIsBest=False
         self.train_step = train_step
@@ -128,6 +107,7 @@ datapath = r'/uctgan/data/udelCT'
 file_reference = r'./data/udelCT/File_reference.csv'
 seed=42
 img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
+img_ls = img_ls[:int(0.75*len(img_ls))]
 train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
 val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
 
@@ -146,14 +126,24 @@ class MyCallback(Callback):
     def on_trial_complete(self, iteration, trials, trial, result, **info):
         print(f"Got result: {result['metric']}")
 
+asha_scheduler = AsyncHyperBandScheduler(
+    time_attr='training_iteration',
+    metric='val_acc',
+    mode='min',
+    max_t=2000,
+    grace_period=100,
+    reduction_factor=3,
+    brackets=1)
+
 analysis = tune.run(
-    tune.with_parameters(AAETrainable, batch_size=12, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="AAE_uct_test3",
+    tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
+    name="resAAE_uct_test",
     metric="val_loss",
     mode="min",
     local_dir="/uctgan/data/ray_results",
     verbose=1,
-    num_samples=6,
+    num_samples=8,
+    scheduler=asha_scheduler,
     resources_per_trial={
         "cpu": 3,
         "gpu": 1
@@ -165,13 +155,15 @@ analysis = tune.run(
                 "optG_beta" : 0.5, 
                 "optD_lr" : tune.sample_from(lambda spec: spec.config.optG_lr/np.random.randint(5, 20)), 
                 "optD_beta" : 0.5,
-                "optAE_lr" : 0.0005, 
+                "optAE_lr" : tune.uniform(1e-3, 5e-5), 
                 "optAE_beta" : 0.9,
-                "act": "relu"
+                "loss_AE": tune.grid_search(mixedGradeintError, "mse"),
+                "loss_DG": "mse",
+                "acc": "mse"
             },
-    keep_checkpoints_num = 100,
+    keep_checkpoints_num = 50,
     checkpoint_score_attr="min-val_loss",
-    checkpoint_freq=1,
+    checkpoint_freq=20,
     checkpoint_at_end=True,
     fail_fast=True
 )

@@ -49,7 +49,7 @@ class AAETrainable(tune.Trainable):
         #===============set up model================
         self.model = AAE(**config)
         self.checkpoint = tf.train.Checkpoint(AE=self.model.autoencoder, AEoptimizers=self.model.autoencoder.optimizer,
-            GeneratorExit=self.model.generator2, Goptimizers=self.model.generator2.optimizer,
+            G=self.model.generator2, Goptimizers=self.model.generator2.optimizer,
             D=self.model.discriminator2, Doptimizers=self.model.discriminator2.optimizer)
         self.train_set=data["train"]
         self.val_set=data["val"]

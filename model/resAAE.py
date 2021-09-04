@@ -22,15 +22,12 @@ class resAAE():
                 loss_GD = "mse",
                 acc = "mse",
                 hidden = (32,64,128,256),
-                output_slices=None,
-                batch_size=16, epochs=5000,
+                output_slices=slice(None),
                 last_encoder_act=relu,
                 last_decoder_act=sigmoid,
                 **kwargs):
         self.encoded_dim = encoded_dim
         self.hidden=hidden
-        self.batch_size=batch_size
-        self.epochs=epochs
         self.loss_function_AE = loss_AE
         self.loss_function_GD = loss_GD
         self.acc_function = acc
@@ -40,7 +37,7 @@ class resAAE():
         self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=tf.Variable(kwargs["optAE_beta"]))
         self.img_shape = img_shape
         self.last_encoder_act=last_encoder_act
-        self.last_decoder_act=last_encoder_act
+        self.last_decoder_act=last_decoder_act
         self.initializer = RandomNormal(mean=0., stddev=1.)
         self.encoder, self.decoder, self.autoencoder, self.discriminator, self.generator = self._modelCompile(
                 self.img_shape, self.encoded_dim, \
@@ -131,9 +128,9 @@ class resAAE():
 
         return encoder, decoder, autoencoder, discriminator, generator
     
-    def train_step(self, train_set, val_set):
-        x_idx_list = sample(range(train_set.shape[0]), self.batch_size)
-        x_idx_list2 = sample(range(train_set.shape[0]), self.batch_size)
+    def train_step(self, train_set, val_set, batch_size):
+        x_idx_list = sample(range(train_set.shape[0]), batch_size)
+        x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
         x = train_set[x_idx_list]
         x2 = train_set[x_idx_list2]
 
@@ -141,12 +138,12 @@ class resAAE():
         fake_latent = self.encoder.predict(x)
         fake_image = self.decoder.predict(fake_latent)
         discriminator_input = np.concatenate((fake_image, x2))
-        discriminator_labels = np.concatenate((np.zeros((self.batch_size, 1)), np.ones((self.batch_size, 1))))
+        discriminator_labels = np.concatenate((np.zeros((batch_size, 1)), np.ones((batch_size, 1))))
 
         discriminator_history = self.discriminator.train_on_batch(discriminator_input, discriminator_labels)
-        generator_history = self.generator.train_on_batch(x, np.ones((self.batch_size, 1)))
+        generator_history = self.generator.train_on_batch(x, np.ones((batch_size, 1)))
 
-        val_x = val_set[sample(range(val_set.shape[0]), self.batch_size*2)]
+        val_x = val_set[sample(range(val_set.shape[0]), batch_size*2)]
         val_loss, val_acc = self.autoencoder.test_on_batch(val_x, val_x, reset_metrics=True, return_dict=False)
 
         history = {
@@ -184,19 +181,19 @@ class resAAE():
             generator_losses.append(generator_history)
 
             if epoch == 1:
-                loss_min = autoencoder_history
+                loss_min = autoencoder_history[0]
                 loss_min_epoch = 1
             
-            if epoch > 5 and autoencoder_history < loss_min:
-                loss_min = autoencoder_history
+            if epoch > 5 and autoencoder_history[0] < loss_min:
+                loss_min = autoencoder_history[0]
                 loss_min_epoch = epoch
-                self.autoencoder.save("../GAN_log/autoencoder_epoch_{}.h5".format(epoch))
+                self.autoencoder.save("./data/Gan_training/log/autoencoder_epoch_{}.h5".format(epoch))
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
                 
             
             print("Epoch--{}".format(epoch))
-            print("AE_loss: {:.4f}  AE_loss_min: {:.4f}  D_loss:{:.3f}   G_loss:{:.3f}".format(
-                autoencoder_history, loss_min, discriminator_history, generator_history
+            print("AE_loss: {:.4f}  AE_loss_min: {:.4f}  D_loss:{:.3f}   G_loss:{:.3f}   AE_mse: {:.4f}".format(
+                autoencoder_history[0], loss_min, discriminator_history, generator_history, autoencoder_history[1]
                 )
             )
         self.history = {'AE_loss':autoencoder_losses, 'D_loss':discriminator_losses, 'G_loss':generator_losses}

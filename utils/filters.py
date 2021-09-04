@@ -3,7 +3,6 @@ from tensorflow import keras
 import numpy as np
 from scipy.signal import convolve2d as conv2d
 
-@tf.function
 def sobelFilter3D(input):
     """
     Description: this is an implementation of 3D sobel silter for tensorflow
@@ -43,7 +42,6 @@ def sobelFilter3D(input):
 
     return output
 
-@tf.function    
 def gaussianFilter3D(input, sigma, kernel_size=None):
     """
     apply 3d guassian filter on a 3d image (a 5D tf.tensor)
