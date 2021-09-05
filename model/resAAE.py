@@ -1,4 +1,5 @@
 #!/home/spl/ml/sitk/bin/python
+import os
 import numpy as np
 from random import sample, seed
 from tensorflow.python.keras.layers.core import Dropout
@@ -32,7 +33,7 @@ class resAAE():
         self.loss_function_GD = loss_GD
         self.acc_function = acc
         self.output_slices=output_slices
-        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]))
+        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]), clipnorm=1.0)
         self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=tf.Variable(kwargs["optD_beta"]))
         self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=tf.Variable(kwargs["optAE_beta"]))
         self.img_shape = img_shape
@@ -157,7 +158,7 @@ class resAAE():
         
         return history
 
-    def train(self, train_set, batch_size, n_epochs, n_sample):
+    def train(self, train_set, batch_size, n_epochs, n_sample, logdir=r"data/Gan_training/log"):
 
         autoencoder_losses = []
         discriminator_losses = []
@@ -184,10 +185,10 @@ class resAAE():
                 loss_min = autoencoder_history[0]
                 loss_min_epoch = 1
             
-            if epoch > 5 and autoencoder_history[0] < loss_min:
+            if epoch > 500 and autoencoder_history[0] < loss_min:
                 loss_min = autoencoder_history[0]
                 loss_min_epoch = epoch
-                self.autoencoder.save("./data/Gan_training/log/autoencoder_epoch_{}.h5".format(epoch))
+                self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
                 
             

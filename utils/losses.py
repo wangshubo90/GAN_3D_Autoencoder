@@ -34,7 +34,7 @@ def meanGradientError(y_true, y_pred):
 
     return tf.reduce_mean(mge)
 
-def mixedGradeintError(y_true, y_pred, alpha=0.001):
+def mixedGradeintError(y_true, y_pred, alpha=0.01):
     """
     Description: Mixed gradient error
     """
