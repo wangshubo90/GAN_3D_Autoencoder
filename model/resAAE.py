@@ -25,7 +25,7 @@ class resAAE():
                 hidden = (32,64,128,256),
                 output_slices=slice(None),
                 last_encoder_act=relu,
-                last_decoder_act=sigmoid,
+                last_decoder_act=relu,
                 **kwargs):
         self.encoded_dim = encoded_dim
         self.hidden=hidden
@@ -158,14 +158,14 @@ class resAAE():
         
         return history
 
-    def train(self, train_set, batch_size, n_epochs, n_sample, logdir=r"data/Gan_training/log"):
+    def train(self, train_set, batch_size, n_epochs, logdir=r"data/Gan_training/log"):
 
         autoencoder_losses = []
         discriminator_losses = []
         generator_losses = []
 
         for epoch in np.arange(1, n_epochs):
-            x_idx_list = sample(range(n_sample), batch_size)
+            x_idx_list = sample(range(train_set.shape[0]), batch_size)
             x = train_set[x_idx_list]
 
             autoencoder_history = self.autoencoder.train_on_batch(x,x)
