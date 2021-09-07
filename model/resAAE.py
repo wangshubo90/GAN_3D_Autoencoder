@@ -101,9 +101,9 @@ class resAAE():
         x = GlobalAveragePooling3D()(x)
         x = Flatten()(x)
         x = Dense(128)(x)
-        x = Dropout(0.7)(x)
+        # x = Dropout(0.85)(x)
         x = Dense(128)(x)
-        x = Dropout(0.7)(x)
+        # x = Dropout(0.85)(x)
         x = Dense(1, activation=last_activation)(x)
         discriminator = Model(inputs=input, outputs=x) 
 

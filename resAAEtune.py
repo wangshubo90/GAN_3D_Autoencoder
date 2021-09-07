@@ -140,7 +140,7 @@ asha_scheduler = AsyncHyperBandScheduler(
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAE_uct_test",
+    name="resAAE_uct_NoDropout",
     metric="val_loss",
     mode="min",
     local_dir="/uctgan/data/ray_results",
