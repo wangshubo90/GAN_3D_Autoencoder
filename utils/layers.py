@@ -126,7 +126,7 @@ def resTP_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding 
     x = BatchNormalization()(x)
     x = activate(x)
 
-    x = Conv3DTranspose(filters = filters, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
+    x = Conv3D(filters = filters, kernel_size=kernel_size, strides=(1,1,1), padding = padding, **kwargs)(x)
     x = BatchNormalization()(x)    
 
     if np.prod(strides) > 1:

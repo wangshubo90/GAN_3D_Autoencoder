@@ -80,7 +80,7 @@ class resAAE():
             slices = kwargs["slices"]
             x = x[slices]
 
-        x = Conv3DTranspose(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=last_activation)(x)
+        x = Conv3D(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=last_activation)(x)
         decoder = Model(inputs=input, outputs=x)
         return decoder
 

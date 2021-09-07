@@ -23,17 +23,16 @@ for gpu in gpus:
         pass
 
 config={
-    "optG_lr":0.0002,
+    "optG_lr":0.00001,
     "optG_beta":0.5,
-    "optD_lr":0.0002,
+    "optD_lr":0.00001,
     "optD_beta":0.5,
     "optAE_lr":0.001,
     "optAE_beta":0.9,
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
-    "last_decoder_act":tanh, 
     "loss_AE": "mse", 
-    "loss_DG": "binary_crossentropy",
+    "loss_DG": "mse",
     "acc": "mse",
     "hidden": (16, 32, 64, 128),
     "output_slices": slice(None),
@@ -42,7 +41,7 @@ config={
 }
 #[slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)]
 model = resAAE(**config)
-logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\tanh-binary-cross"
+logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\relu-mse-cross"
 os.makedirs(logdir, exist_ok=True)
 json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json"), "w"))
 pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
