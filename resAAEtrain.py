@@ -42,9 +42,10 @@ config={
 }
 #[slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)]
 model = resAAE(**config)
-logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\sigmoid"
-json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json")))
-pickle.dump(config, open(os.path.join(logdir, "config.pkl")))
+logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\tanh-binary-cross"
+os.makedirs(logdir, exist_ok=True)
+json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json"), "w"))
+pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
 #===============set up dataset================
 def read_data(file_ls):
     dataset = np.zeros(shape=[len(file_ls), 48, 96, 96, 1], dtype=np.float32)
