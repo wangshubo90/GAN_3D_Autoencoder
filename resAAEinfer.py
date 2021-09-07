@@ -1,37 +1,22 @@
-import os, glob, json
+import os, glob, json, pickle
 import tensorflow as tf
 import numpy as np
 from model.resAAE import resAAE   
 import matplotlib.pyplot as plt
 import SimpleITK as sitk 
 from sklearn.model_selection import train_test_split
+from natsort import natsorted
 # checkpoint_dir = "/uctgan/data/ray_results/AAE_uct_test2/AAETrainable_16ccf_00002_2_optD_lr=3.3526e-06,optG_lr=1.6763e-05_2021-08-25_00-47-57"
 # checkpoint = "checkpoint_002479"
 # param = "params.json"
 # config = json.load(open(os.path.join(checkpoint_dir, param)))
-logdir=""
-
-
-config={
-    "optG_lr":0.0002,
-    "optG_beta":0.5,
-    "optD_lr":0.00002,
-    "optD_beta":0.5,
-    "optAE_lr":0.0002,
-    "optAE_beta":0.9,
-    "img_shape": (48, 96, 96, 1), 
-    "encoded_dim": 16, 
-    "loss_AE": "mse", 
-    "loss_DG": "mse",
-    "acc": "mse",
-    "hidden": (16, 32, 64, 128),
-    "output_slices": slice(None),
-    "batch_size": 16,
-    "epochs": 5000
-}
+logdir=r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\tanh-binary-cross"
+config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
+model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
+best_model = natsorted(model_checkpoints)[-1]
 
 model = resAAE(**config)
-model.autoencoder.load_weights(r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\autoencoder_epoch_4994.h5")
+model.autoencoder.load_weights(best_model)
 # checkpoint_restore = tf.train.Checkpoint(
 #     model=model.autoencoder,
 #     optimizers = model.autoencoder.optimizer,
