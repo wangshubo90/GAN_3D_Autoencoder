@@ -26,6 +26,8 @@ for gpu in gpus:
 
 from ray import tune
 from ray.tune.schedulers import AsyncHyperBandScheduler
+from ray.tune.suggest import ConcurrencyLimiter
+from ray.tune.suggest.bayesopt import BayesOptSearch
 from ray.tune.callback import Callback
 
 from tensorflow.keras.optimizers import Adam
@@ -132,8 +134,8 @@ class MyCallback(Callback):
 asha_scheduler = AsyncHyperBandScheduler(
     time_attr='training_iteration',
     max_t=3000,
-    grace_period=100,
-    reduction_factor=3,
+    grace_period=750,
+    reduction_factor=2,
     brackets=1)
 
 analysis = tune.run(
@@ -143,20 +145,24 @@ analysis = tune.run(
     mode="min",
     local_dir="/uctgan/data/ray_results",
     verbose=1,
-    num_samples=3,
+    num_samples=16,
     scheduler=asha_scheduler,
     resources_per_trial={
         "cpu": 3,
         "gpu": 1
     },
+    search_alg=ConcurrencyLimiter(
+        BayesOptSearch(random_search_steps=4),
+        max_concurrent=4,
+    ),
     stop=stopper, 
     config = {
-                "hidden":(32,64,128,256),
-                "optAE_lr" : tune.grid_search([0.001, 0.0005, 0.00025]), 
+                "hidden": (32,64,128,256),
+                "optAE_lr" : tune.uniform(0.005,  0.0001), 
                 "optAE_beta" : 0.9,
-                "optG_lr" : tune.sample_from(lambda spec: spec.config.optAE_lr/np.random.randint(2, 10)), 
+                "optG_lr" : tune.uniform(0.001,  0.00005), 
                 "optG_beta" : 0.5, 
-                "optD_lr" : tune.sample_from(lambda spec: spec.config.optG_lr/np.random.randint(5, 20)), 
+                "optD_lr" : tune.uniform(0.001,  0.00005), 
                 "optD_beta" : 0.5,
                 "loss_AE": "mse",
                 "loss_DG": "mse",
