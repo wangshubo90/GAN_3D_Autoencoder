@@ -25,7 +25,7 @@ class resAAE():
                 hidden = (32,64,128,256),
                 output_slices=slice(None),
                 last_encoder_act=relu,
-                last_decoder_act=relu,
+                last_decoder_act=sigmoid,
                 **kwargs):
         self.encoded_dim = encoded_dim
         self.hidden=hidden
