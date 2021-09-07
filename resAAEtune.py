@@ -134,7 +134,7 @@ class MyCallback(Callback):
 asha_scheduler = AsyncHyperBandScheduler(
     time_attr='training_iteration',
     max_t=3000,
-    grace_period=750,
+    grace_period=500,
     reduction_factor=2,
     brackets=1)
 
@@ -145,24 +145,20 @@ analysis = tune.run(
     mode="min",
     local_dir="/uctgan/data/ray_results",
     verbose=1,
-    num_samples=16,
+    num_samples=4,
     scheduler=asha_scheduler,
     resources_per_trial={
         "cpu": 3,
         "gpu": 1
     },
-    search_alg=ConcurrencyLimiter(
-        BayesOptSearch(random_search_steps=4),
-        max_concurrent=4,
-    ),
     stop=stopper, 
     config = {
                 "hidden": (32,64,128,256),
-                "optAE_lr" : tune.uniform(0.005,  0.0001), 
+                "optAE_lr" : tune.grid_search([0.0005, 0.0001, 0.00005]), 
                 "optAE_beta" : 0.9,
-                "optG_lr" : tune.uniform(0.001,  0.00005), 
+                "optG_lr" : tune.sample_from(lambda _:_.config.optAE_lr / np.random.randint(1,5)), 
                 "optG_beta" : 0.5, 
-                "optD_lr" : tune.uniform(0.001,  0.00005), 
+                "optD_lr" : tune.sample_from(lambda _:_.config.optAE_lr / np.random.randint(1,5)), 
                 "optD_beta" : 0.5,
                 "loss_AE": "mse",
                 "loss_DG": "mse",
