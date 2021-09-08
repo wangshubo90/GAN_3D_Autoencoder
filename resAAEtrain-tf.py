@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os, glob, json, pickle
 #================ Environment variables ================
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0' 
@@ -6,13 +7,14 @@ import tensorflow as tf
 
 import SimpleITK as sitk 
 import numpy as np
-from model.resAAE import resAAE
+from model.resAAETF import resAAE
 from tqdm import tqdm
 from utils.losses import *
 from functools import partial
 import random
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.activations import tanh
+from tensorflow.keras.losses import MeanSquaredError
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
@@ -31,9 +33,9 @@ config={
     "optAE_beta":0.9,
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
-    "loss_AE": "mse", 
-    "loss_DG": "mse",
-    "acc": "mse",
+    "loss_AE": MeanSquaredError(), 
+    "loss_DG": MeanSquaredError(),
+    "acc": MeanSquaredError(),
     "hidden": (16, 32, 64, 128),
     "output_slices": slice(None),
     "batch_size": 16,

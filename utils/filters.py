@@ -30,12 +30,12 @@ def sobelFilter3D(input):
         Gz[i,:,:] = hpz[i] * conv2d(hx, hy, mode="full") # h'_y = h'(z) :: h(x) :: h(y) | valid and same padding while scipy.signal has no conv3d. 
 
     Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1)) # image 3 dimension + channel + output channel
-    Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1))
-    Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1))
+    Gy_tf = tf.reshape(tf.constant(Gy, dtype=tf.float32),(3,3,3,1,1))
+    Gz_tf = tf.reshape(tf.constant(Gz, dtype=tf.float32),(3,3,3,1,1))
 
     grad_x = tf.nn.conv3d(input, Gx_tf, strides=(1,)*5, padding="SAME")
-    grad_y = tf.nn.conv3d(input, Gx_tf, strides=(1,)*5, padding="SAME")
-    grad_z = tf.nn.conv3d(input, Gx_tf, strides=(1,)*5, padding="SAME")
+    grad_y = tf.nn.conv3d(input, Gy_tf, strides=(1,)*5, padding="SAME")
+    grad_z = tf.nn.conv3d(input, Gz_tf, strides=(1,)*5, padding="SAME")
     
     output = tf.math.sqrt(
         tf.math.square(grad_x)+tf.math.square(grad_y)+tf.math.square(grad_z))
