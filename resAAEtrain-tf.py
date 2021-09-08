@@ -34,7 +34,7 @@ config={
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
     "loss_AE": MeanSquaredError(), 
-    "loss_DG": MeanSquaredError(),
+    "loss_GD": MeanSquaredError(),
     "acc": MeanSquaredError(),
     "hidden": (16, 32, 64, 128),
     "output_slices": slice(None),
@@ -74,6 +74,7 @@ val_set = read_data(val_img)
 seed=42
 np.random.seed(42)
 
-history = model.train(train_set, 16, 5000, logdir=logdir)
+test = model.train_step(train_set, val_set, 16)
+# history = model.train(train_set, 16, 5000, logdir=logdir)
 
 
