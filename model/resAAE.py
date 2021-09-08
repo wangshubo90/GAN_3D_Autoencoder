@@ -100,10 +100,11 @@ class resAAE():
         
         x = GlobalAveragePooling3D()(x)
         x = Flatten()(x)
+        x = Dropout(0.5)(x)
         x = Dense(128)(x)
-        x = Dropout(0.7)(x)
+        x = Dropout(0.5)(x)
         x = Dense(128)(x)
-        x = Dropout(0.7)(x)
+        x = Dropout(0.5)(x)
         x = Dense(1, activation=last_activation)(x)
         discriminator = Model(inputs=input, outputs=x) 
 
@@ -158,7 +159,7 @@ class resAAE():
         
         return history
 
-    def train(self, train_set, batch_size, n_epochs, n_sample, logdir=r"data/Gan_training/log"):
+    def train(self, train_set, batch_size, n_epochs, n_sample, logdir=r"data/Gan_training/log", logstart=200):
 
         autoencoder_losses = []
         discriminator_losses = []
@@ -185,10 +186,11 @@ class resAAE():
                 loss_min = autoencoder_history[0]
                 loss_min_epoch = 1
             
-            if epoch > 500 and autoencoder_history[0] < loss_min:
+            if epoch > logstart and autoencoder_history[0] < loss_min:
                 loss_min = autoencoder_history[0]
                 loss_min_epoch = epoch
-                self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
+                if not logdir:
+                    self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
                 
             
