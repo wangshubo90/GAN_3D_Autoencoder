@@ -159,7 +159,7 @@ class resAAE():
         
         return history
 
-    def train(self, train_set, batch_size, n_epochs, logdir=r"data/Gan_training/log"):
+    def train(self, train_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500):
 
         autoencoder_losses = []
         discriminator_losses = []
