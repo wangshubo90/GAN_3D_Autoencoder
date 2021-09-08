@@ -21,29 +21,29 @@ class resAAE():
                 loss_AE = "mse", 
                 loss_GD = "mse",
                 acc = "mse",
+                g_loss_factor = .1,
                 hidden = (32,64,128,256),
+                hidden_D = (32,64,128),
                 output_slices=slice(None),
                 last_encoder_act=relu,
                 last_decoder_act=sigmoid,
                 **kwargs):
         self.encoded_dim = encoded_dim
         self.hidden=hidden
+        self.hidden_D=hidden_D
         self.loss_function_AE = loss_AE
         self.loss_function_GD = loss_GD
         self.acc_function = acc
         self.output_slices=output_slices
-        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]))
+        self.gfactor=g_loss_factor
         self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=tf.Variable(kwargs["optD_beta"]))
         self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=tf.Variable(kwargs["optAE_beta"]))
         self.img_shape = img_shape
         self.last_encoder_act=last_encoder_act
         self.last_decoder_act=last_decoder_act
         self.initializer = RandomNormal(mean=0., stddev=1.)
-        self.encoder, self.decoder, self.autoencoder, self.discriminator= self._modelBuild(
-                self.img_shape, self.encoded_dim, \
-                self.optimizer_autoencoder,\
-                self.optimizer_discriminator,\
-                self.optimizer_generator
+        self.encoder, self.decoder, self.autoencoder, self.discriminator = self._modelBuild(
+                self.img_shape
                 )
 
     def _buildEncoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu):
@@ -99,23 +99,24 @@ class resAAE():
         
         x = GlobalAveragePooling3D()(x)
         x = Flatten()(x)
-        x = Dense(128)(x)
-        x = Dropout(0.7)(x)
-        x = Dense(128)(x)
-        x = Dropout(0.7)(x)
+        x = Dropout(0.5)(x)
+        x = Dense(filters[-1]//2)(x)
+        x = Dropout(0.5)(x)
+        x = Dense(filters[-1]//2)(x)
+        x = Dropout(0.5)(x)
         x = Dense(1, activation=last_activation)(x)
         discriminator = Model(inputs=input, outputs=x) 
 
         return discriminator
 
-    def _modelBuild(self, input_shape, encoded_dim, optimizer_autoencoder, optimizer_discriminator, optimizer_generator):
+    def _modelBuild(self, input_shape):
 
         encoder=self._buildEncoder(input_shape, filters=self.hidden, last_activation=self.last_encoder_act)
         decoder=self._buildDecoder(encoder.output_shape[1:], filters=self.hidden, last_activation=self.last_decoder_act, slices=self.output_slices)
         
         autoencoder_input = Input(shape = input_shape)
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
-        discriminator=self._buildDiscriminator(input_shape, filters=self.hidden, last_activation=self.last_decoder_act)
+        discriminator=self._buildDiscriminator(input_shape, filters=self.hidden_D, last_activation=self.last_decoder_act)
         assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
         #autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE, metrics=self.acc_function)
         # discriminator.trainable = False
@@ -126,6 +127,35 @@ class resAAE():
     
 
         return encoder, decoder, autoencoder, discriminator
+
+    @tf.function
+    def __train_step__(self, x, x2, val_x, gfactor):
+        with tf.GradientTape() as ae_tape:
+            fake_image = self.autoencoder(x, training = True)
+            fake_output = self.discriminator(fake_image, training=False)
+
+            ae_loss = self.loss_function_AE(x, fake_image)
+            g_loss = self.loss_function_GD(fake_output, tf.ones_like(fake_output))
+            total_loss = ae_loss + g_loss*gfactor
+            ae_acc = self.acc_function(x, fake_image)
+        
+        ae_grad = ae_tape.gradient(total_loss, self.autoencoder.trainable_variables)
+        self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.autoencoder.trainable_variables))
+        
+        with tf.GradientTape() as disc_tape:
+            fake_image = self.autoencoder(x, training = False)
+            fake_output = self.discriminator(fake_image, training=True)
+            real_output = self.discriminator(x2, training=True)
+
+            d_label = tf.concat([tf.zeros_like(fake_output), tf.ones_like(real_output)], axis=0)
+            d_loss = self.loss_function_GD(tf.concat([fake_output, real_output], axis=0), d_label)
+
+        d_grad = disc_tape.gradient(d_loss, self.discriminator.trainable_variables)
+        self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
+        val_output = self.autoencoder(val_x, training=False)
+        val_loss = self.loss_function_AE(val_x, val_output)
+        val_acc = self.acc_function(val_x, val_output)
+        return ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss
     
     def train_step(self, train_set, val_set, batch_size):
         x_idx_list = sample(range(train_set.shape[0]), batch_size)
@@ -133,40 +163,11 @@ class resAAE():
         x = train_set[x_idx_list]
         x2 = train_set[x_idx_list2]
         val_x = val_set[sample(range(val_set.shape[0]), batch_size*2)]
-
-        @tf.function
-        def tf_train(gfactor):
-            with tf.GradientTape() as ae_tape:
-                fake_image = self.autoencoder(x, training = True)
-                fake_output = self.discriminator(fake_image, training=False)
-
-                ae_loss = self.loss_function_AE(x, fake_image)
-                g_loss = self.loss_function_GD(fake_output, tf.ones_like(fake_output))
-                total_loss = ae_loss + g_loss*gfactor
-                ae_acc = self.acc_function(x, fake_image)
-            
-            ae_grad = ae_tape.gradient(total_loss, self.autoencoder.trainable_variables)
-            self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.autoencoder.trainable_variables))
-            
-            with tf.GradientTape() as disc_tape:
-                fake_image = self.autoencoder(x, training = False)
-                fake_output = self.discriminator(fake_image, training=True)
-                real_output = self.discriminator(x2, training=True)
-
-                d_label = tf.concat([tf.zeros_like(fake_output), tf.ones_like(real_output)], axis=0)
-                d_loss = self.loss_function_GD(tf.concat([fake_output, real_output], axis=0), d_label)
-
-            d_grad = disc_tape.gradient(d_loss, self.discriminator.trainable_variables)
-            self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
-            val_output = self.autoencoder(val_x, training=False)
-            val_loss = self.loss_function_AE(val_x, val_output)
-            val_acc = self.acc_function(val_x, val_output)
-            return ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc
-
-        ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc = tf_train(self.gfactor)
+        ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss= self.__train_step__(x, x2, val_x, self.gfactor)
         
         history = {
                     'AE_loss':ae_loss,
+                    'total_loss': total_loss,
                     'AE_acc':ae_acc,
                     'D_loss':d_loss, 
                     'G_loss':g_loss,
@@ -176,38 +177,45 @@ class resAAE():
         
         return history
 
-    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log"):
-
-        autoencoder_losses = []
-        discriminator_losses = []
-        generator_losses = []
+    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500):
 
         for epoch in np.arange(1, n_epochs):
-            self.train_step(train_set, val_set, batch_size)
-            
-            autoencoder_losses.append(autoencoder_history)
-            discriminator_losses.append(discriminator_history)
-            generator_losses.append(generator_history)
+            history = self.train_step(train_set, val_set, batch_size)
 
             if epoch == 1:
-                loss_min = autoencoder_history[0]
+                loss_min = history["val_loss"]
                 loss_min_epoch = 1
+                summary = {k:[] for k in history.keys()}
             
-            if epoch > 500 and autoencoder_history[0] < loss_min:
-                loss_min = autoencoder_history[0]
+            if epoch > logstart and history["val_loss"] < loss_min:
+                loss_min = min(history["val_loss"], loss_min)
                 loss_min_epoch = epoch
                 self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
-                
             
-            print("Epoch--{}".format(epoch))
-            print("AE_loss: {:.4f}  AE_loss_min: {:.4f}  D_loss:{:.3f}   G_loss:{:.3f}   AE_mse: {:.4f}".format(
-                autoencoder_history[0], loss_min, discriminator_history, generator_history, autoencoder_history[1]
-                )
+            print("Epoch -- {} -- CurrentBest -- {} -- val-loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
+            
+            print("   ".join(["{}: {:.4f}".format(k, v) for k, v in history.items()])
             )
-        self.history = {'AE_loss':autoencoder_losses, 'D_loss':discriminator_losses, 'G_loss':generator_losses}
         
-        return self.history
+        return summary
+    
+    def save_image(output, epoch, slices=None):
+        for i in range(-11, -8):
+            image = sitk.GetArrayFromImage(sitk.ReadImage(val_img[i]))
+            image= image[:, 2:98, 2:98].reshape((1,48,96,96,1))
+            gen_image=np.squeeze(model.autoencoder.predict(image.astype(np.float32)/255)) * 255
+            image = np.squeeze(image)
+
+            fig, ax = plt.subplots(2,3, figsize=(16,9))
+            ax[0,0].imshow(image[35,:,:],cmap="Greys")
+            ax[1,0].imshow(gen_image[35,:,:],cmap="Greys")
+            ax[0,1].imshow(image[::-1,50,:],cmap="Greys")
+            ax[1,1].imshow(gen_image[::-1,50,:],cmap="Greys")
+            ax[0,2].imshow(image[::-1,:,60],cmap="Greys")
+            ax[1,2].imshow(gen_image[::-1,:,60],cmap="Greys")
+            fig.save
+        return
 
     def load_model(self):
 
