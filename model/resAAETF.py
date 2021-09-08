@@ -4,7 +4,6 @@ import numpy as np
 from random import sample, seed
 from tensorflow.python.keras.layers.core import Dropout
 from tensorflow.python.keras.layers.pooling import GlobalAveragePooling3D
-from tqdm import tqdm
 import tensorflow as tf 
 from tensorflow import keras
 from tensorflow.keras import layers, Sequential, Model
@@ -33,14 +32,14 @@ class resAAE():
         self.loss_function_GD = loss_GD
         self.acc_function = acc
         self.output_slices=output_slices
-        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]), clipnorm=1.0)
+        self.optimizer_generator = Adam(kwargs["optG_lr"], beta_1=tf.Variable(kwargs["optG_beta"]))
         self.optimizer_discriminator = Adam(kwargs["optD_lr"], beta_1=tf.Variable(kwargs["optD_beta"]))
         self.optimizer_autoencoder = Adam(kwargs["optAE_lr"], beta_1=tf.Variable(kwargs["optAE_beta"]))
         self.img_shape = img_shape
         self.last_encoder_act=last_encoder_act
         self.last_decoder_act=last_decoder_act
         self.initializer = RandomNormal(mean=0., stddev=1.)
-        self.encoder, self.decoder, self.autoencoder, self.discriminator, self.generator = self._modelCompile(
+        self.encoder, self.decoder, self.autoencoder, self.discriminator= self._modelBuild(
                 self.img_shape, self.encoded_dim, \
                 self.optimizer_autoencoder,\
                 self.optimizer_discriminator,\
@@ -109,7 +108,7 @@ class resAAE():
 
         return discriminator
 
-    def _modelCompile(self, input_shape, encoded_dim, optimizer_autoencoder, optimizer_discriminator, optimizer_generator):
+    def _modelBuild(self, input_shape, encoded_dim, optimizer_autoencoder, optimizer_discriminator, optimizer_generator):
 
         encoder=self._buildEncoder(input_shape, filters=self.hidden, last_activation=self.last_encoder_act)
         decoder=self._buildDecoder(encoder.output_shape[1:], filters=self.hidden, last_activation=self.last_decoder_act, slices=self.output_slices)
@@ -118,7 +117,7 @@ class resAAE():
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
         discriminator=self._buildDiscriminator(input_shape, filters=self.hidden, last_activation=self.last_decoder_act)
         assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
-        autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE, metrics=self.acc_function)
+        #autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE, metrics=self.acc_function)
         # discriminator.trainable = False
         # generator = Model(autoencoder_input, discriminator(decoder(encoder(autoencoder_input))))
         # generator.compile(optimizer=optimizer_generator, loss=self.loss_function_GD)
@@ -126,55 +125,65 @@ class resAAE():
         # discriminator.compile(optimizer=optimizer_discriminator, loss=self.loss_function_GD)
     
 
-        return encoder, decoder, autoencoder, discriminator, generator
+        return encoder, decoder, autoencoder, discriminator
     
     def train_step(self, train_set, val_set, batch_size):
         x_idx_list = sample(range(train_set.shape[0]), batch_size)
         x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
         x = train_set[x_idx_list]
         x2 = train_set[x_idx_list2]
-
-        autoencoder_history = self.autoencoder.train_on_batch(x,x)
-        fake_latent = self.encoder.predict(x)
-        fake_image = self.decoder.predict(fake_latent)
-        discriminator_input = np.concatenate((fake_image, x2))
-        discriminator_labels = np.concatenate((np.zeros((batch_size, 1)), np.ones((batch_size, 1))))
-
-        discriminator_history = self.discriminator.train_on_batch(discriminator_input, discriminator_labels)
-        generator_history = self.generator.train_on_batch(x, np.ones((batch_size, 1)))
-
         val_x = val_set[sample(range(val_set.shape[0]), batch_size*2)]
-        val_loss, val_acc = self.autoencoder.test_on_batch(val_x, val_x, reset_metrics=True, return_dict=False)
 
+        @tf.function
+        def tf_train(gfactor):
+            with tf.GradientTape() as ae_tape:
+                fake_image = self.autoencoder(x, training = True)
+                fake_output = self.discriminator(fake_image, training=False)
+
+                ae_loss = self.loss_function_AE(x, fake_image)
+                g_loss = self.loss_function_GD(fake_output, tf.ones_like(fake_output))
+                total_loss = ae_loss + g_loss*gfactor
+                ae_acc = self.acc_function(x, fake_image)
+            
+            ae_grad = ae_tape.gradient(total_loss, self.autoencoder.trainable_variables)
+            self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.autoencoder.trainable_variables))
+            
+            with tf.GradientTape() as disc_tape:
+                fake_image = self.autoencoder(x, training = False)
+                fake_output = self.discriminator(fake_image, training=True)
+                real_output = self.discriminator(x2, training=True)
+
+                d_label = tf.concat([tf.zeros_like(fake_output), tf.ones_like(real_output)], axis=0)
+                d_loss = self.loss_function_GD(tf.concat([fake_output, real_output], axis=0), d_label)
+
+            d_grad = disc_tape.gradient(d_loss, self.discriminator.trainable_variables)
+            self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
+            val_output = self.autoencoder(val_x, training=False)
+            val_loss = self.loss_function_AE(val_x, val_output)
+            val_acc = self.acc_function(val_x, val_output)
+            return ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc
+
+        ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc = tf_train(self.gfactor)
+        
         history = {
-                    'AE_loss':autoencoder_history[0],
-                    'AE_acc':autoencoder_history[1],
-                    'D_loss':discriminator_history, 
-                    'G2_loss':generator_history,
+                    'AE_loss':ae_loss,
+                    'AE_acc':ae_acc,
+                    'D_loss':d_loss, 
+                    'G_loss':g_loss,
                     'val_loss':val_loss,
                     "val_acc":val_acc
                 }
         
         return history
 
-    def train(self, train_set, batch_size, n_epochs, n_sample, logdir=r"data/Gan_training/log"):
+    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log"):
 
         autoencoder_losses = []
         discriminator_losses = []
         generator_losses = []
 
         for epoch in np.arange(1, n_epochs):
-            x_idx_list = sample(range(n_sample), batch_size)
-            x = train_set[x_idx_list]
-
-            autoencoder_history = self.autoencoder.train_on_batch(x,x)
-            fake_latent = self.encoder.predict(x)
-            fake_image = self.decoder.predict(fake_latent)
-            discriminator_input = np.concatenate((fake_image, x))
-            discriminator_labels = np.concatenate((np.zeros((batch_size, 1)), np.ones((batch_size, 1))))
-            
-            discriminator_history = self.discriminator.train_on_batch(discriminator_input, discriminator_labels)
-            generator_history = self.generator.train_on_batch(x, np.ones((batch_size, 1)))
+            self.train_step(train_set, val_set, batch_size)
             
             autoencoder_losses.append(autoencoder_history)
             discriminator_losses.append(discriminator_history)
