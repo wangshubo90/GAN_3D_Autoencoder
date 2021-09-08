@@ -26,6 +26,8 @@ for gpu in gpus:
 
 from ray import tune
 from ray.tune.schedulers import AsyncHyperBandScheduler
+from ray.tune.suggest import ConcurrencyLimiter
+from ray.tune.suggest.bayesopt import BayesOptSearch
 from ray.tune.callback import Callback
 
 from tensorflow.keras.optimizers import Adam
@@ -33,6 +35,7 @@ from tensorflow import keras
 import SimpleITK as sitk
 from model.resAAE import resAAE
 import numpy as np
+import random
 from random import sample
 from datapipeline.aae_reader import data_reader_np
 from functools import reduce
@@ -107,6 +110,8 @@ datapath = r'..\data\ct\data'
 file_reference = r'..\data\ct\File_reference.csv'
 seed=42
 img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
+random.seed(seed)
+random.shuffle(img_ls)
 img_ls = img_ls[:int(0.75*len(img_ls))]
 train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
 val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
@@ -128,21 +133,19 @@ class MyCallback(Callback):
 
 asha_scheduler = AsyncHyperBandScheduler(
     time_attr='training_iteration',
-    metric='val_acc',
-    mode='min',
-    max_t=2000,
-    grace_period=100,
-    reduction_factor=3,
+    max_t=3000,
+    grace_period=500,
+    reduction_factor=2,
     brackets=1)
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAE_uct_test",
+    name="resAAE_uct_NoDropout",
     metric="val_loss",
     mode="min",
     local_dir="/uctgan/data/ray_results",
     verbose=1,
-    num_samples=8,
+    num_samples=4,
     scheduler=asha_scheduler,
     resources_per_trial={
         "cpu": 3,
@@ -150,20 +153,20 @@ analysis = tune.run(
     },
     stop=stopper, 
     config = {
-                "hidden":(32,64,128,256),
-                "optG_lr" : tune.uniform(5e-6, 1e-4), 
-                "optG_beta" : 0.5, 
-                "optD_lr" : tune.sample_from(lambda spec: spec.config.optG_lr/np.random.randint(5, 20)), 
-                "optD_beta" : 0.5,
-                "optAE_lr" : tune.uniform(1e-3, 5e-5), 
+                "hidden": (32,64,128,256),
+                "optAE_lr" : tune.grid_search([0.0005, 0.0001, 0.00005]), 
                 "optAE_beta" : 0.9,
-                "loss_AE": tune.grid_search(mixedGradeintError, "mse"),
+                "optG_lr" : tune.sample_from(lambda _:_.config.optAE_lr / np.random.randint(1,5)), 
+                "optG_beta" : 0.5, 
+                "optD_lr" : tune.sample_from(lambda _:_.config.optAE_lr / np.random.randint(1,5)), 
+                "optD_beta" : 0.5,
+                "loss_AE": "mse",
                 "loss_DG": "mse",
                 "acc": "mse"
             },
-    keep_checkpoints_num = 50,
+    keep_checkpoints_num = 20,
     checkpoint_score_attr="min-val_loss",
-    checkpoint_freq=20,
+    checkpoint_freq=500,
     checkpoint_at_end=True,
     fail_fast=True
 )

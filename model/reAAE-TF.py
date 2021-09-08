@@ -80,7 +80,7 @@ class resAAE():
             slices = kwargs["slices"]
             x = x[slices]
 
-        x = Conv3D(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=last_activation)(x)
+        x = Conv3DTranspose(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=last_activation)(x)
         decoder = Model(inputs=input, outputs=x)
         return decoder
 
@@ -100,11 +100,10 @@ class resAAE():
         
         x = GlobalAveragePooling3D()(x)
         x = Flatten()(x)
-        x = Dropout(0.5)(x)
         x = Dense(128)(x)
-        # x = Dropout(0.85)(x)
+        x = Dropout(0.7)(x)
         x = Dense(128)(x)
-        # x = Dropout(0.85)(x)
+        x = Dropout(0.7)(x)
         x = Dense(1, activation=last_activation)(x)
         discriminator = Model(inputs=input, outputs=x) 
 
@@ -117,15 +116,14 @@ class resAAE():
         
         autoencoder_input = Input(shape = input_shape)
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
-        assert autoencoder.input_shape == autoencoder.output_shape
-        autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE, metrics=self.acc_function)
-        #assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
         discriminator=self._buildDiscriminator(input_shape, filters=self.hidden, last_activation=self.last_decoder_act)
-        discriminator.trainable = False
-        generator = Model(autoencoder_input, discriminator(decoder(encoder(autoencoder_input))))
-        generator.compile(optimizer=optimizer_generator, loss=self.loss_function_GD)
-        discriminator.trainable = True
-        discriminator.compile(optimizer=optimizer_discriminator, loss=self.loss_function_GD)
+        assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
+        autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE, metrics=self.acc_function)
+        # discriminator.trainable = False
+        # generator = Model(autoencoder_input, discriminator(decoder(encoder(autoencoder_input))))
+        # generator.compile(optimizer=optimizer_generator, loss=self.loss_function_GD)
+        # discriminator.trainable = True
+        # discriminator.compile(optimizer=optimizer_discriminator, loss=self.loss_function_GD)
     
 
         return encoder, decoder, autoencoder, discriminator, generator
@@ -159,14 +157,14 @@ class resAAE():
         
         return history
 
-    def train(self, train_set, batch_size, n_epochs, logdir=r"data/Gan_training/log"):
+    def train(self, train_set, batch_size, n_epochs, n_sample, logdir=r"data/Gan_training/log"):
 
         autoencoder_losses = []
         discriminator_losses = []
         generator_losses = []
 
         for epoch in np.arange(1, n_epochs):
-            x_idx_list = sample(range(train_set.shape[0]), batch_size)
+            x_idx_list = sample(range(n_sample), batch_size)
             x = train_set[x_idx_list]
 
             autoencoder_history = self.autoencoder.train_on_batch(x,x)
@@ -186,11 +184,10 @@ class resAAE():
                 loss_min = autoencoder_history[0]
                 loss_min_epoch = 1
             
-            if epoch > logstart and autoencoder_history[0] < loss_min:
+            if epoch > 500 and autoencoder_history[0] < loss_min:
                 loss_min = autoencoder_history[0]
                 loss_min_epoch = epoch
-                if not logdir:
-                    self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
+                self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
                 
             
