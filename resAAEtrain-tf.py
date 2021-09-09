@@ -27,19 +27,20 @@ for gpu in gpus:
         pass
 
 config={
-    "g_loss_factor":0.1,
-    "hidden_D":(8, 16, 32, 64),
-    "optD_lr":0.00005,
+    "g_loss_factor":0.05,
+    "hidden_D":(16, 32, 64, 128),
+    "optD_lr":0.0001,
     "optD_beta":0.5,
-    "optAE_lr":0.00005,
+    "optAE_lr":0.0005,
     "optAE_beta":0.9,
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
-    "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.1, mode="add"), 
-    "loss_GD": BinaryCrossentropy(from_logits=True),
+    "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
+    "loss_GD": BinaryCrossentropy(from_logits=False),
+    "last_decoder_act": tanh,
     "acc": MeanSquaredError(),
     "hidden": (8, 16, 32, 64),
-    "d_dropout": 1.0,
+    "d_dropout": 0.1,
     "output_slices": slice(None),
     "batch_size": 16,
     "epochs": 5000
