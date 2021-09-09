@@ -70,10 +70,10 @@ class resAAE():
     def _buildDecoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu, slices=None, **kwargs):
         input = Input(shape=input_shape)
         x = input
-        for ft in filters[-1:0:-1]:
+        for ft in filters[-1:1:-1]:
             x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME", **kwargs)
 
-        x = resTP_block(x, filters=filters[0], strides=(2,2,2),padding="SAME", activation="relu", **kwargs)
+        x = resTP_block(x, filters=filters[1], strides=(2,2,2),padding="SAME", activation="relu", **kwargs)
         
         x = Conv3DTranspose(filters=filters[0], kernel_size=3, strides=(2,)*3, padding="SAME", activation="relu", **kwargs)(x)
         x = BatchNormalization()(x)
