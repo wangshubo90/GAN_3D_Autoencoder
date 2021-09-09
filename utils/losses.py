@@ -43,6 +43,24 @@ def mixedGradeintError(y_true, y_pred, alpha=0.001):
     mse = keras.losses.mse(y_true, y_pred)
 
     return tf.reduce_mean(alpha * mge + (1-alpha)*mse)
+
+class mixedMSE():
+    def __init__(self, filter, mode="add", alpha=0.001, **kwargs):
+        self.filter = filter
+        self.alpha = alpha
+        self.kwargs = kwargs
+        self.mode = mode
+
+    def __call__(self, y_true, y_pred):
+        tobemix = keras.losses.mse(self.filter(y_true, **self.kwargs), self.filter(y_pred, **self.kwargs))
+        mse = keras.losses.mse(y_true, y_pred)
+        if self.mode=="add":
+            loss = tf.reduce_mean(self.alpha * tobemix + mse)
+        elif self.mode=="blend":
+            loss = tf.reduce_mean(self.alpha * tobemix + (1-self.alpha)*mse)
+        
+        
+        return loss
     
 if __name__=="__main__":
     

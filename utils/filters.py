@@ -3,64 +3,68 @@ from tensorflow import keras
 import numpy as np
 from scipy.signal import convolve2d as conv2d
 
-def sobelFilter3D(input):
+class sobelFilter3D(input):
     """
     Description: this is an implementation of 3D sobel silter for tensorflow
     reference: 
     """
-    smooth = np.array((1,2,1))
-    derivative = np.array((1,0,-1))
+    def __init__(self):
+        smooth = np.array((1,2,1))
+        derivative = np.array((1,0,-1))
 
-    hx = smooth.reshape((1,3))
-    hpx = derivative.reshape((1,3))
+        hx = smooth.reshape((1,3))
+        hpx = derivative.reshape((1,3))
 
-    hy = smooth.reshape((3,1))
-    hpy = derivative.reshape((3,1))
+        hy = smooth.reshape((3,1))
+        hpy = derivative.reshape((3,1))
 
-    hz = smooth
-    hpz = derivative
+        hz = smooth
+        hpz = derivative
 
-    Gx = np.zeros((3,3,3))
-    Gy = np.zeros((3,3,3))
-    Gz = np.zeros((3,3,3))
+        Gx = np.zeros((3,3,3))
+        Gy = np.zeros((3,3,3))
+        Gz = np.zeros((3,3,3))
 
-    for i in range(3):
-        Gx[i,:,:] = hz[i] * conv2d(hpx, hy, mode="full") # h'_x = h'(x) :: h(y) :: h(z) | "::" stands for convolution; mode="full" is very important
-        Gy[i,:,:] = hz[i] * conv2d(hx, hpy, mode="full") # h'_y = h'(y) :: h(x) :: h(z) | this is why we cannot use tf.nn.conv3d which only has 
-        Gz[i,:,:] = hpz[i] * conv2d(hx, hy, mode="full") # h'_y = h'(z) :: h(x) :: h(y) | valid and same padding while scipy.signal has no conv3d. 
+        for i in range(3):
+            Gx[i,:,:] = hz[i] * conv2d(hpx, hy, mode="full") # h'_x = h'(x) :: h(y) :: h(z) | "::" stands for convolution; mode="full" is very important
+            Gy[i,:,:] = hz[i] * conv2d(hx, hpy, mode="full") # h'_y = h'(y) :: h(x) :: h(z) | this is why we cannot use tf.nn.conv3d which only has 
+            Gz[i,:,:] = hpz[i] * conv2d(hx, hy, mode="full") # h'_y = h'(z) :: h(x) :: h(y) | valid and same padding while scipy.signal has no conv3d. 
 
-    Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1)) # image 3 dimension + channel + output channel
-    Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1))
-    Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1))
-
-    grad_x = tf.nn.conv3d(input, Gx_tf, strides=(1,)*5, padding="SAME")
-    grad_y = tf.nn.conv3d(input, Gx_tf, strides=(1,)*5, padding="SAME")
-    grad_z = tf.nn.conv3d(input, Gx_tf, strides=(1,)*5, padding="SAME")
+        self.Gx_tf = tf.reshape(tf.constant(Gx, dtype=tf.float32),(3,3,3,1,1)) # image 3 dimension + channel + output channel
+        self.Gy_tf = tf.reshape(tf.constant(Gy, dtype=tf.float32),(3,3,3,1,1))
+        self.Gz_tf = tf.reshape(tf.constant(Gz, dtype=tf.float32),(3,3,3,1,1))
     
-    output = tf.math.sqrt(
-        tf.math.square(grad_x)+tf.math.square(grad_y)+tf.math.square(grad_z))
+    def __call__(self, input):
+        grad_x = tf.nn.conv3d(input, self.Gx_tf, strides=(1,)*5, padding="SAME")
+        grad_y = tf.nn.conv3d(input, self.Gy_tf, strides=(1,)*5, padding="SAME")
+        grad_z = tf.nn.conv3d(input, self.Gz_tf, strides=(1,)*5, padding="SAME")
+    
+        output = tf.math.sqrt(
+            tf.math.square(grad_x)+tf.math.square(grad_y)+tf.math.square(grad_z))
 
-    return output
+        return output
 
-def gaussianFilter3D(input, sigma, kernel_size=None):
+class gaussianFilter3D():
     """
     apply 3d guassian filter on a 3d image (a 5D tf.tensor)
     """
-    if kernel_size == None:
-        kernel_size = int(sigma * 6)+1
+    def __init__(self, sigma, kernel_size=None):
+        if kernel_size == None:
+            kernel_size = int(sigma * 6)+1
+        
+        ax = np.linspace(-(kernel_size - 1) / 2., (kernel_size - 1) / 2., kernel_size)
+        xx, yy, zz= np.meshgrid(ax, ax, ax)
+        kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy) + np.square(zz)) / np.power(sigma,2))
+        kernel = kernel / np.sum(kernel)
+
+        kernel = kernel[:,:,:, np.newaxis, np.newaxis].astype(np.float32) # image 3 dimension + No. of channel + No. of output channel
+        kernel = tf.constant(kernel, dtype=tf.float32)
+        self.kernel = kernel
     
-    ax = np.linspace(-(kernel_size - 1) / 2., (kernel_size - 1) / 2., kernel_size)
-    xx, yy, zz= np.meshgrid(ax, ax, ax)
-    kernel = np.exp(-0.5 * (np.square(xx) + np.square(yy) + np.square(zz)) / np.power(sigma,2))
-    kernel = kernel / np.sum(kernel)
+    def __call__(self, input):
+        output=tf.nn.conv3d(input, self.kernel, strides=(1,1,1,1,1), padding="SAME")
 
-    kernel = kernel[:,:,:, np.newaxis, np.newaxis].astype(np.float32) # image 3 dimension + No. of channel + No. of output channel
-    kernel = tf.constant(kernel, dtype=tf.float32)
-    
-
-    output=tf.nn.conv3d(input, kernel, strides=(1,1,1,1,1), padding="SAME")
-
-    return output
+        return output
 
 def laplacianFilter3D(input):
     kernel = -1*np.ones(shape=(3,3,3,1,1),dtype=np.float32)
