@@ -197,7 +197,7 @@ class resAAE():
             
             return history
 
-    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500):
+    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500, logimage=8):
 
         for epoch in np.arange(1, n_epochs):
             history, val_output = self.train_step(train_set, val_set, batch_size)
@@ -211,7 +211,8 @@ class resAAE():
                 loss_min = min(history["val_loss"], loss_min)
                 loss_min_epoch = epoch
                 self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
-                self.save_image(val_output, epoch, logdir)
+                if logimage:
+                    self.save_image(val_output, epoch, logdir, logimage)
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
             
             print("Epoch -- {} -- CurrentBest -- {} -- val-loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
@@ -221,8 +222,8 @@ class resAAE():
         
         return summary
     
-    def save_image(output, epoch,logdir="."):
-        image = np.squeeze(output.numpy())
+    def save_image(output, epoch, logdir=".", logimage=8):
+        image = np.squeeze(output.numpy())[:logimage]
         shape = image.shape
         image = image[:, shape[1]//2, ...]
         mid = ( shape[0] + 1 ) // 2 
