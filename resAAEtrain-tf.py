@@ -27,20 +27,20 @@ for gpu in gpus:
         pass
 
 config={
-    "g_loss_factor":0.0000000001,
-    "hidden_D":(8, 16, 32, 64),
-    "optD_lr":0.000000000001,
+    "g_loss_factor":0.000000001,
+    "hidden_D":(16, 32, 64, 128),
+    "optD_lr":0.000000001,
     "optD_beta":0.5,
-    "optAE_lr":0.00005,
+    "optAE_lr":0.001,
     "optAE_beta":0.9,
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
     "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
     "loss_GD": BinaryCrossentropy(from_logits=False),
-    "last_decoder_act":tanh,
+    "last_decoder_act": tanh,
     "acc": MeanSquaredError(),
-    "hidden": (8, 16, 32, 32),
-    "d_dropout": 0.2,
+    "hidden": (8, 16, 32, 64),
+    "d_dropout": 0.1,
     "output_slices": slice(None),
     "batch_size": 16,
     "epochs": 5000
@@ -52,8 +52,8 @@ os.makedirs(logdir, exist_ok=True)
 json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json"), "w"))
 pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
 #===============set up dataset================
-# def read_data(file_ls):
-#     dataset = np.zeros(shape=[len(file_ls), 48, 96, 96, 1], dtype=np.float32)
+def read_data(file_ls):
+    dataset = np.zeros(shape=[len(file_ls), 48, 96, 96, 1], dtype=np.float32)
     
 #     for idx, file in enumerate(file_ls):
 #         img = sitk.ReadImage(file)
@@ -72,25 +72,25 @@ file_reference = r'..\Training\File_reference.csv'
 # np.random.seed(42)
 # random.shuffle(img_ls)
 
-# train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
-# val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
+train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
+val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
 
-# train_set = read_data(train_img) 
-# val_set = read_data(val_img)
-# evl_set = read_data(evl_img)
+train_set = read_data(train_img) 
+val_set = read_data(val_img)
+evl_set = read_data(evl_img)
 
-# np.save(open(os.path.join(datapath, "trainset.npy"), "wb"), train_set)
-# np.save(open(os.path.join(datapath, "valset.npy"), "wb"), val_set)
-# np.save(open(os.path.join(datapath, "evlset.npy"), "wb"), evl_set)
+np.save(open(os.path.join(datapath, "trainset.npy"), "wb"), train_set)
+np.save(open(os.path.join(datapath, "valset.npy"), "wb"), val_set)
+np.save(open(os.path.join(datapath, "evlset.npy"), "wb"), evl_set)
 
 # import matplotlib.pyplot as plt
 # plt.imshow(np.squeeze(train_set[0])[0,...], cmap="gray")
 
-train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
-val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
-evl_set = np.load(open(os.path.join(datapath, "evlset.npy"), "rb"))
+# train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
+# val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
+# evl_set = np.load(open(os.path.join(datapath, "evlset.npy"), "rb"))
 
 # test = model.train_step(train_set, val_set, 16)
-history = model.train(train_set, val_set, 16, 10000, logdir=logdir, logstart=500)
+# history = model.train(train_set, val_set, 16, 10000, logdir=logdir, logstart=500)
 
 

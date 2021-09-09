@@ -27,8 +27,8 @@ class resAAE():
                 hidden_D = (32,64,128),
                 output_slices=slice(None),
                 last_encoder_act=relu,
-                last_decoder_act=sigmoid,
-                last_D_act=sigmoid,
+                last_decoder_act=relu,
+                last_D_act = sigmoid,
                 d_dropout=0.8,
                 **kwargs):
         self.encoded_dim = encoded_dim
@@ -45,58 +45,55 @@ class resAAE():
         self.img_shape = img_shape
         self.last_encoder_act=last_encoder_act
         self.last_decoder_act=last_decoder_act
-        self.last_D_act=last_D_act
+        self.last_D_act = last_D_act
         self.initializer = RandomNormal(mean=0., stddev=1.)
         self.encoder, self.decoder, self.autoencoder, self.discriminator = self._modelBuild(
                 self.img_shape
                 )
 
-    def _buildEncoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu):
+    def _buildEncoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu, **kwargs):
         
         input = Input(shape=input_shape)
-        x = Conv3D(filters=filters[0], kernel_size=5, strides=(2,2,2), padding="SAME")(input)
+        x = Conv3D(filters=filters[0], kernel_size=5, strides=(2,2,2), padding="SAME", **kwargs)(input)
         x = BatchNormalization()(x)
         x = relu(x)
-        for i, ft in enumerate(filters[1:]):
-            if i == len(filters[1:])-1:
-                x = residual_block(x, filters = ft, kernel_size= 3,  
-                            strides = (2,2,2), padding = "SAME", activate=relu)
-            else:
-                x = residual_block(x, filters = ft, kernel_size= 3,  
-                            strides = (2,2,2), padding = "SAME", activate=last_activation)
+        for ft in filters[1:-1]:
+            x = residual_block(x, filters = ft, kernel_size= 3,  
+                        strides = (2,2,2), padding = "SAME", activate=relu, **kwargs)
+        
+        x = residual_block(x, filters = filters[-1], kernel_size= 3,  
+                strides = (2,2,2), padding = "SAME", activate=last_activation, **kwargs)
         
         encoder = Model(inputs=input, outputs=x)        
         return encoder
      
-    def _buildDecoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu, **kwargs):
+    def _buildDecoder(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu, slices=None, **kwargs):
         input = Input(shape=input_shape)
         x = input
-        for i, ft in enumerate(filters[-1:0:-1]):
-            if i != len(filters[-2::-1])-1:
-                x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME")
-            else:
-                x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME", activation="relu")
+        for ft in filters[-1:1:-1]:
+            x = resTP_block(x, filters=ft, strides=(2,2,2),padding="SAME", **kwargs)
+
+        x = resTP_block(x, filters=filters[1], strides=(2,2,2),padding="SAME", activation="relu", **kwargs)
         
-        x = Conv3DTranspose(filters=filters[0], kernel_size=3, strides=(2,)*3, padding="SAME", activation="relu")(x)
+        x = Conv3DTranspose(filters=filters[0], kernel_size=3, strides=(2,)*3, padding="SAME", activation="relu", **kwargs)(x)
         x = BatchNormalization()(x)
 
-        if "slices" in kwargs:
-            slices = kwargs["slices"]
+        if not slices:
             x = x[slices]
 
-        x = Conv3DTranspose(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=last_activation)(x)
+        x = Conv3D(filters=1, kernel_size=3, strides=(1,)*3, padding="SAME", activation=last_activation, **kwargs)(x)
         decoder = Model(inputs=input, outputs=x)
         return decoder
 
-    def _buildDiscriminator(self, input_shape, filters=[16, 32, 64, 128], last_activation=sigmoid):
+    def _buildDiscriminator(self, input_shape, filters=[16, 32, 64, 128], last_activation=relu, **kwargs):
 
         input = Input(shape=input_shape)
-        x = Conv3D(filters=filters[0], kernel_size=5, strides=(2,2,2), padding="SAME")(input)
+        x = Conv3D(filters=filters[0], kernel_size=3, strides=(2,2,2), padding="SAME", **kwargs)(input)
         x = BatchNormalization()(x)
         x = relu(x)
-        for i, ft in enumerate(filters[1:]):
+        for ft in filters[1:]:
             x = residual_block(x, filters = ft, kernel_size= 3,  
-                        strides = (2,2,2), padding = "SAME", activate=relu)
+                        strides = (2,2,2), padding = "SAME", activate=relu, **kwargs)
         
         x = GlobalAveragePooling3D()(x)
         x = Flatten()(x)
@@ -112,12 +109,12 @@ class resAAE():
 
     def _modelBuild(self, input_shape):
 
-        encoder=self._buildEncoder(input_shape, filters=self.hidden, last_activation=self.last_encoder_act)
-        decoder=self._buildDecoder(encoder.output_shape[1:], filters=self.hidden, last_activation=self.last_decoder_act, slices=self.output_slices)
+        encoder=self._buildEncoder(input_shape, filters=self.hidden, last_activation=self.last_encoder_act, use_bias=False)
+        decoder=self._buildDecoder(encoder.output_shape[1:], filters=self.hidden, last_activation=self.last_decoder_act, slices=self.output_slices, use_bias=False)
         
         autoencoder_input = Input(shape = input_shape)
         autoencoder=Model(autoencoder_input, decoder(encoder(autoencoder_input)))
-        discriminator=self._buildDiscriminator(input_shape, filters=self.hidden_D)
+        discriminator=self._buildDiscriminator(input_shape, filters=self.hidden_D, last_activation=self.last_D_act)
         assert autoencoder.output_shape == autoencoder.input_shape , "shape incompatible for autoencoder"
         #autoencoder.compile(optimizer=optimizer_autoencoder, loss=self.loss_function_AE, metrics=self.acc_function)
         # discriminator.trainable = False
