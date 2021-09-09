@@ -35,10 +35,11 @@ config={
     "optAE_beta":0.9,
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
-    "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3),alpha=0.1, mode="add"), 
+    "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.1, mode="add"), 
     "loss_GD": BinaryCrossentropy(from_logits=True),
     "acc": MeanSquaredError(),
     "hidden": (8, 16, 32, 64),
+    "d_dropout": 1.0,
     "output_slices": slice(None),
     "batch_size": 16,
     "epochs": 5000
