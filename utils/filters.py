@@ -55,7 +55,7 @@ def gaussianFilter3D(input, sigma, kernel_size=None):
     kernel = kernel / np.sum(kernel)
 
     kernel = kernel[:,:,:, np.newaxis, np.newaxis].astype(np.float32) # image 3 dimension + No. of channel + No. of output channel
-    kernel = tf.Variable(kernel, dtype=tf.float32, trainable=False)
+    kernel = tf.constant(kernel, dtype=tf.float32)
     
 
     output=tf.nn.conv3d(input, kernel, strides=(1,1,1,1,1), padding="SAME")
@@ -65,7 +65,15 @@ def gaussianFilter3D(input, sigma, kernel_size=None):
 def laplacianFilter3D(input):
     kernel = -1*np.ones(shape=(3,3,3,1,1),dtype=np.float32)
     kernel[1,1,1,...] = 26
-    kernel=tf.Variable(kernel, trainable=False)
+    kernel=tf.constant(kernel)
+
+    output=tf.nn.conv3d(input, kernel, strides=(1,1,1,1,1), padding="SAME")
+    return output
+
+def sharpenFilter3D(input):
+    kernel = -1*np.ones(shape=(3,3,3,1,1),dtype=np.float32)
+    kernel[1,1,1,...] = 32
+    kernel=tf.constant(kernel)
 
     output=tf.nn.conv3d(input, kernel, strides=(1,1,1,1,1), padding="SAME")
     return output

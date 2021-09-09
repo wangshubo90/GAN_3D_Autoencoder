@@ -34,11 +34,12 @@ def meanGradientError(y_true, y_pred):
 
     return tf.reduce_mean(mge)
 
-def mixedGradeintError(y_true, y_pred, alpha=0.01):
+
+def mixedGradeintError(y_true, y_pred, alpha=0.001):
     """
     Description: Mixed gradient error
     """
-    mge = keras.losses.mse(filters.sobelFilter3D(y_true), filters.sobelFilter3D(y_pred))
+    mge = keras.losses.mse(filters.sobelFilter3D(y_true), filters.laplacianFilter3D(y_pred))
     mse = keras.losses.mse(y_true, y_pred)
 
     return tf.reduce_mean(alpha * mge + (1-alpha)*mse)

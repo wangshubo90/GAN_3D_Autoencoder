@@ -1,7 +1,7 @@
 import os, glob, json, pickle
 import tensorflow as tf
 import numpy as np
-from model.resAAE import resAAE   
+from model.resAAETF import resAAE   
 import matplotlib.pyplot as plt
 import SimpleITK as sitk 
 from sklearn.model_selection import train_test_split
@@ -10,7 +10,7 @@ from natsort import natsorted
 # checkpoint = "checkpoint_002479"
 # param = "params.json"
 # config = json.load(open(os.path.join(checkpoint_dir, param)))
-logdir=r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\tanh-binary-cross"
+logdir=r"D:\gitrepos\data\experiments\test_AAE-TF"
 config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
 model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
 best_model = natsorted(model_checkpoints)[-1]
@@ -36,8 +36,10 @@ def read_data(file_ls):
 
 # datapath = r'/uctgan/data/udelCT'
 # file_reference = r'./data/udelCT/File_reference.csv'
-datapath = r'..\Data'
-file_reference = r'..\Training\File_reference.csv'
+# datapath = r'..\Data'
+# file_reference = r'..\Training\File_reference.csv'
+datapath = r'..\data\ct\Data'
+file_reference = r'..\data\ct\File_reference.csv'
 seed=42
 img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
 train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
