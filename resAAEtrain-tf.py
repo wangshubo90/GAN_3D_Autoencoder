@@ -1,4 +1,3 @@
-from GAN_Autoencoder.utils.filters import gaussianFilter3D
 from __future__ import absolute_import
 import os, glob, json, pickle
 #================ Environment variables ================
@@ -17,6 +16,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.activations import tanh
 from tensorflow.keras.losses import MeanSquaredError, BinaryCrossentropy
 from utils.noise import addNoise
+from utils.filters import *
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
@@ -35,9 +35,9 @@ config={
     "optAE_beta":0.9,
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
-    "loss_AE": mixedMSE(), 
+    "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3),alpha=0.1, mode="add"), 
     "loss_GD": BinaryCrossentropy(from_logits=True),
-    "acc": MeanSquaredError(filter=gaussianFilter3D, mode="add", sigma=0.5),
+    "acc": MeanSquaredError(),
     "hidden": (8, 16, 32, 64),
     "output_slices": slice(None),
     "batch_size": 16,
