@@ -29,11 +29,13 @@ model.autoencoder.load_weights(best_model)
 # datapath = r'..\Data'
 # file_reference = r'..\Training\File_reference.csv'
 datapath = r'..\data\ct\Data'
-file_reference = r'..\data\ct\File_reference.csv'
-seed=42
-img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
-train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
-val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
+train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
+val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
+# file_reference = r'..\data\ct\File_reference.csv'
+# seed=42
+# img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
+# train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
+# val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
 
 for i in range(-11, -8):
     image = val_set[i]

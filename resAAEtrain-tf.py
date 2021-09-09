@@ -27,25 +27,27 @@ for gpu in gpus:
         pass
 
 config={
-    "g_loss_factor":0.1,
+    "g_loss_factor":0.0000000001,
     "hidden_D":(8, 16, 32, 64),
-    "optD_lr":0.00005,
+    "optD_lr":0.000000000001,
     "optD_beta":0.5,
     "optAE_lr":0.00005,
     "optAE_beta":0.9,
     "img_shape": (48, 96, 96, 1), 
     "encoded_dim": 16, 
-    "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.1, mode="add"), 
-    "loss_GD": BinaryCrossentropy(from_logits=True),
+    "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
+    "loss_GD": BinaryCrossentropy(from_logits=False),
+    "last_decoder_act":tanh,
     "acc": MeanSquaredError(),
-    "hidden": (8, 16, 32, 64),
+    "hidden": (8, 16, 32, 32),
+    "d_dropout": 0.2,
     "output_slices": slice(None),
     "batch_size": 16,
     "epochs": 5000
 }
 #[slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)]
 model = resAAE(**config)
-logdir = r"..\data\experiments\test_AAE-TF"
+logdir = r"..\data\experiments\Ablation_AAE-TF-no-noise"
 os.makedirs(logdir, exist_ok=True)
 json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json"), "w"))
 pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
@@ -56,14 +58,14 @@ pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
 #     for idx, file in enumerate(file_ls):
 #         img = sitk.ReadImage(file)
 #         img = sitk.GetArrayFromImage(img)
-#         img = addNoise(img, 20, 12)
+#         # img = addNoise(img, 20, 12)
 #         img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
 #         dataset[idx] = img
 #     return dataset   
-datapath = r'..\Data'
+datapath = r'..\data\ct\Data'
 file_reference = r'..\Training\File_reference.csv'
-# # datapath = r"/uctgan/data/udelCT"
-# # file_reference = r"/uctgan/data/Gan_training/File_reference.csv"
+# datapath = r"/uctgan/data/udelCT"
+# file_reference = r"/uctgan/data/Gan_training/File_reference.csv"
 # img_ls = glob.glob(os.path.join(datapath, "*.nii.gz"))
 # seed = 42
 # random.seed(seed)

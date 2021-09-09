@@ -3,7 +3,7 @@ from tensorflow import keras
 import numpy as np
 from scipy.signal import convolve2d as conv2d
 
-class sobelFilter3D(input):
+class sobelFilter3D():
     """
     Description: this is an implementation of 3D sobel silter for tensorflow
     reference: 
