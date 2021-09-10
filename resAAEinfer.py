@@ -10,7 +10,7 @@ from natsort import natsorted
 # checkpoint = "checkpoint_002479"
 # param = "params.json"
 # config = json.load(open(os.path.join(checkpoint_dir, param)))
-logdir=r"..\Gan_log\test_AAE-TF-withnoise"
+logdir=r"..\Gan_log\Nongan_AAE-TF-no-noise"
 config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
 model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
 best_model = natsorted(model_checkpoints)[-1]
