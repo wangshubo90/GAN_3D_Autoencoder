@@ -3,6 +3,7 @@ import os, glob, json, pickle
 #================ Environment variables ================
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0' 
 os.environ['AUTOGRAPH_VERBOSITY'] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import tensorflow as tf
 
 import SimpleITK as sitk 
@@ -13,7 +14,7 @@ from utils.losses import *
 from functools import partial
 import random
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.activations import tanh
+from tensorflow.keras.activations import relu
 from tensorflow.keras.losses import MeanSquaredError, BinaryCrossentropy
 from utils.noise import addNoise
 from utils.filters import *
@@ -27,9 +28,9 @@ for gpu in gpus:
         pass
 
 config={
-    "g_loss_factor":0.000000001,
-    "hidden_D":(16, 32, 64, 128),
-    "optD_lr":0.000000001,
+    "g_loss_factor":0.001,
+    "hidden_D":(8, 16, 16, 32),
+    "optD_lr":0.001,
     "optD_beta":0.5,
     "optAE_lr":0.001,
     "optAE_beta":0.9,
@@ -37,17 +38,19 @@ config={
     "encoded_dim": 16, 
     "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
     "loss_GD": BinaryCrossentropy(from_logits=False),
-    "last_decoder_act": tanh,
+    "last_decoder_act": relu,
     "acc": MeanSquaredError(),
     "hidden": (8, 16, 16, 32),
     "d_dropout": 0.1,
     "output_slices": slice(None),
     "batch_size": 16,
-    "epochs": 5000
+    "epochs": 15000
 }
 #[slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)]
 model = resAAE(**config)
-logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\Nongan_AAE-TF-no-noise-8-16-16-32"
+# logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\Nongan_AAE-TF-no-noise-8-16-16-32"
+logdir = "/uctgan/data/ray_results/train_8-16-16-32-encoder-gan"
+model.autoencoder.load_weights("/uctgan/data/ray_results/train_8-16-16-32-encoder/autoencoder_epoch_5751.h5")
 os.makedirs(logdir, exist_ok=True)
 json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json"), "w"))
 pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
@@ -62,10 +65,10 @@ pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
 #         img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
 #         dataset[idx] = img
 #     return dataset   
-datapath = r'..\Data'
-file_reference = r'..\Training\File_reference.csv'
-# # datapath = r"/uctgan/data/udelCT"
-# # file_reference = r"/uctgan/data/Gan_training/File_reference.csv"
+# datapath = r'..\Data'
+# file_reference = r'..\Training\File_reference.csv'
+datapath = r"/uctgan/data/udelCT"
+file_reference = r"/uctgan/data/Gan_training/File_reference.csv"
 # img_ls = glob.glob(os.path.join(datapath, "*.nii.gz"))
 # seed = 42
 # random.seed(seed)
@@ -91,6 +94,6 @@ val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
 evl_set = np.load(open(os.path.join(datapath, "evlset.npy"), "rb"))
 
 # test = model.train_step(train_set, val_set, 16)
-history = model.train(train_set, val_set, 16, 10000, logdir=logdir, logstart=500)
+history = model.train(train_set, val_set, 16, 15000, logdir=logdir, logstart=2000)
 
 

@@ -139,7 +139,14 @@ def resTP_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding 
     x = activate(x)
 
     return x
-    
+
+class GlobalSumPooling3D():
+    def __init__(self, kernel_size):
+        pass
+        
+    def __call__(self):
+        pass
+
 if __name__=="__main__":
 
     input = tf.zeros(shape = (3, 96, 100, 100, 1))
