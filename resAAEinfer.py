@@ -10,7 +10,7 @@ from natsort import natsorted
 # checkpoint = "checkpoint_002479"
 # param = "params.json"
 # config = json.load(open(os.path.join(checkpoint_dir, param)))
-logdir=r"D:\gitrepos\data\experiments\test_AAE-TF"
+logdir=r"..\data\experiments\Ablation_AAE-TF-no-noise-GAN-continue"
 config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
 model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
 best_model = natsorted(model_checkpoints)[-1]
@@ -49,3 +49,5 @@ for i in range(-11, -8):
     ax[1,1].imshow(gen_image[::-1,50,:],cmap="gray")
     ax[0,2].imshow(image[::-1,:,60],cmap="gray")
     ax[1,2].imshow(gen_image[::-1,:,60],cmap="gray")
+    plt.show()
+    plt.close()

@@ -95,13 +95,14 @@ class resAAE():
             x = residual_block(x, filters = ft, kernel_size= 3,  
                         strides = (2,2,2), padding = "SAME", activate=relu, **kwargs)
         
-        x = GlobalAveragePooling3D()(x)
+        x = Conv3D(1, kernel_size=3, strides=(1,1,1), padding="SAME")(x)
+        # x = GlobalAveragePooling3D()(x)
         x = Flatten()(x)
-        x = Dropout(self.d_dropout)(x)
-        x = Dense(filters[-1]//2)(x)
-        x = Dropout(self.d_dropout)(x)
-        x = Dense(filters[-1]//2)(x)
-        x = Dropout(self.d_dropout)(x)
+        # x = Dropout(self.d_dropout)(x)
+        # x = Dense(filters[-1]//2)(x)
+        # x = Dropout(self.d_dropout)(x)
+        # x = Dense(filters[-1]//2)(x)
+        # x = Dropout(self.d_dropout)(x)
         x = Dense(1, activation=last_activation)(x)
         discriminator = Model(inputs=input, outputs=x) 
 
@@ -220,7 +221,7 @@ class resAAE():
     def save_image(self, output, epoch, logdir=".", logimage=8):
         image = np.squeeze(output.numpy())[:logimage]
         shape = image.shape
-        image = image[:, shape[1]//2, ...]
+        image = image[:, 2*shape[1]//3, ...]
         mid = ( shape[0] + 1 ) // 2 
         image = np.concatenate([image[:mid].reshape((-1, shape[-1])), image[mid:].reshape((-1, shape[-1]))], axis=1)
 
