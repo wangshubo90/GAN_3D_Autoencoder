@@ -94,8 +94,8 @@ class resAAE():
         for ft in filters[1:]:
             x = residual_block(x, filters = ft, kernel_size= 3,  
                         strides = (2,2,2), padding = "SAME", activate=relu, **kwargs)
-        
-        x = Conv3D(1, kernel_size=3, strides=(1,1,1), padding="SAME")(x)
+
+        x = Conv3D(filters=1, kernel_size=3, strides=(1,1,1), padding="SAME", **kwargs)(x)
         # x = GlobalAveragePooling3D()(x)
         x = Flatten()(x)
         # x = Dropout(self.d_dropout)(x)
@@ -217,6 +217,12 @@ class resAAE():
             )
         
         return summary
+
+    def __plot_image__():
+        pass
+
+    def __tsbd_log__(self, writer, metrics, image=None):
+        pass
     
     def save_image(self, output, epoch, logdir=".", logimage=8):
         image = np.squeeze(output.numpy())[:logimage]
