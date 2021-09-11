@@ -49,7 +49,7 @@ config={
 #[slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)]
 model = resAAE(**config)
 # logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\Nongan_AAE-TF-no-noise-8-16-16-32"
-logdir = "/uctgan/data/ray_results/train_8-16-16-32-encoder-gan"
+logdir = "\data\ray_results"
 model.autoencoder.load_weights("/uctgan/data/ray_results/train_8-16-16-32-encoder/autoencoder_epoch_5751.h5")
 os.makedirs(logdir, exist_ok=True)
 json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json"), "w"))

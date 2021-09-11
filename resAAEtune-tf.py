@@ -72,7 +72,8 @@ class AAETrainable(tune.Trainable):
 
     def save_checkpoint(self, checkpoint_dir):
         if self.currentIsBest:
-            self.model.autoencoder.save(os.path.join(checkpoint_dir,"AE.h5"))
+            self.model.autoencoder.save(os.path.join(checkpoint_dir,"AE-{}.h5".format(self.iteration)))
+            self.model.discriminator.save(os.path.join(checkpoint_dir,"D-{}.h5".format(self.iteration)))
             self.model.save_image(self.val_output, self.iteration, logdir=checkpoint_dir)
         return checkpoint_dir
 
