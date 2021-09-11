@@ -1,15 +1,14 @@
 #!/urs/bin/python3.7/python
-import os, glob
+import os, logging
 #================ Environment variables ================
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' 
 os.environ['AUTOGRAPH_VERBOSITY'] = '1'
 import tensorflow as tf
 tf.autograph.set_verbosity(1)
 tf.get_logger().setLevel(logging.ERROR)
-import logging
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.optimizers import Adam, schedules
+from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 # import horovod.tensorflow as hvd
 
 #======================= Set up Horovod ======================
@@ -38,6 +37,9 @@ from datapipeline.aae_reader import data_reader_np
 from functools import reduce
 from sklearn.model_selection import train_test_split
 from utils.losses import *
+from utils.filters import *
+from tensorflow.keras.losses import MeanSquaredError, BinaryCrossentropy
+from tensorflow.keras.activations import relu
 
 class AAETrainable(tune.Trainable):
     def setup(self, config, batch_size=None, epochs=None, data=None):
@@ -65,9 +67,9 @@ class AAETrainable(tune.Trainable):
         else:
             self.currentIsBest = False
 
-        if self.iteration > 5000:
+        if self.iteration > 10000:
             self.model.gfactor = 0.001
-        
+        history = {k:v.numpy() for k, v in history.items()}
         return history
 
     def save_checkpoint(self, checkpoint_dir):
@@ -80,10 +82,10 @@ class AAETrainable(tune.Trainable):
         
         pass 
 
-    def reset_config(self, new_config):
-        self.model = resAAE(**new_config)
-        self.val_loss = 0.01
-        self.currentIsBest=False
+    # def reset_config(self, new_config):
+    #     self.model = resAAE(**new_config)
+    #     self.val_loss = 0.01
+    #     self.currentIsBest=False
 
 #===============set up dataset================
 
@@ -99,18 +101,6 @@ def stopper(trial_id, result):
         result["AE_loss"]  > 0.2 and result["training_iteration"] > 500 ,
     ]
     return reduce(lambda x,y: x or y, conditions)
-
-class offonScheduler(schedules.LearningRateSchedule):
-    def __init__(self, off_learning_rate, on_learning_rate, step_threshold):
-        self.off_learning_rate = off_learning_rate
-        self.on_learning_rate = on_learning_rate
-        self.step_threshold = step_threshold
-
-    def __call__(self, step):
-        if step < self.step_threshold
-            return self.off_learning_rate
-        else:
-            return self.on_learning_rate
 
 class MyCallback(Callback):
     def on_trial_complete(self, iteration, trials, trial, result, **info):
@@ -139,16 +129,17 @@ analysis = tune.run(
     stop=stopper, 
     config = {
         "g_loss_factor":0.00000001,
-        "hidden": grid_search((8,8,16,16),(8,16,16,32),(8,16,32,64)),
+        "hidden": grid_search([(8,8,16,16),(8,16,16,32),(8,16,32,64)]),
         "hidden_D":(8, 16, 16, 32),
         "optAE_lr" : 0.001, 
         "optAE_beta" : 0.9,
-        "optD_lr" : offonScheduler(0.00000001, 0.001, 7500), 
+        "optD_lr" : PiecewiseConstantDecay(boundaries = [10000,], values = [0.00000001, 0.0001]), 
         "optD_beta" : 0.5,
         "img_shape": (48, 96, 96, 1), 
         "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
         "loss_GD": BinaryCrossentropy(from_logits=False),
-        "acc": MeanSquaredError()
+        "last_decoder_act": relu,
+        "acc": MeanSquaredError(),
         "d_dropout": 0.1,
         "output_slices": slice(None)
         },
