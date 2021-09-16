@@ -8,7 +8,7 @@ from tensorflow.keras import layers, Sequential, Model
 from tensorflow.keras import activations
 from tensorflow.keras import backend as bk
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D
+from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking
 from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
@@ -30,38 +30,54 @@ class temporalAAE():
         self.AAE.autoencoder.load_weights(AAE_checkpoint)
         self.encoder = self.AAE.encoder
         self.decoder = self.AAE.decoder
+        self.discriminator = self.AAE.discriminator
         self.temporalModel = self._buildTemporal(self.lstm_layers, self.last_conv)
+        self.loss_function_AE = self.AAE.loss_function_AE
+        self.loss_function_GD = self.AAE.loss_function_GD
+        self.acc_function = self.AAE.acc_function
+        self.gfactor=self.AAE.gfactor
+        self.optimizer_autoencoder = self.AAE.optimizer_autoencoder
+        self.optimizer_discriminator = self.AAE.optimizer_discriminator
 
     def _buildTemporal(self,lstm_hidden_layers=[32,32], last_conv=True):
 
         model = Sequential()
-        model.add(Input(shape=(None), dtype=tf.float32, ragged=True))
-        model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
+        model.add(Input(shape=(4, *self.encoder.output_shape[1:]), dtype=tf.float32))
+        model.add(Masking(mask_value=0., input_shape=(4, *self.encoder.output_shape[1:])))
+        # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
         for i in lstm_hidden_layers:
             model.add(ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True))
         model.add(ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu"))
-        model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
+        # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
         return model
 
     @tf.function
-    def __train_step__(self, x, val_x, gfactor, validate=True):
-        
+    def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
+        input = x
         with tf.GradientTape() as ae_tape:
-            fake_image = self.autoencoder(x, training = True)
+            x = self.encoder(x, training=False)
+            x = Lambda(lambda a: bk.reshape(a, (-1, 4, *self.encoder.output_shape[1:])))(x)
+            x = self.temporalModel(x)
+            x = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.output_shape[1:])))(x)
+            fake_image = self.decoder(x, training = False)
             fake_output = self.discriminator(fake_image, training=False)
 
-            ae_loss = self.loss_function_AE(x, fake_image)
+            ae_loss = self.loss_function_AE(y, fake_image)
             g_loss = self.loss_function_GD(fake_output, tf.ones_like(fake_output))
             total_loss = ae_loss + g_loss*gfactor
-            ae_acc = self.acc_function(x, fake_image)
+            ae_acc = self.acc_function(y, fake_image)
         
-        ae_grad = ae_tape.gradient(total_loss, self.autoencoder.trainable_variables)
-        self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.autoencoder.trainable_variables))
-        
+        ae_grad = ae_tape.gradient(total_loss, self.temporalModel.trainable_variables)
+        self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.temporalModel.trainable_variables))
+        x = input
         with tf.GradientTape() as disc_tape:
-            fake_image = self.autoencoder(x, training = False)
+            x = self.encoder(x, training=False)
+            x = Lambda(lambda y: bk.reshape(y, (-1, 4, *self.encoder.output_shape[1:])))(x)
+            x = self.temporalModel(x, training=False)
+            x = Lambda(lambda y: bk.reshape(y, (-1, *self.encoder.output_shape[1:])))(x)
+            fake_image = self.decoder(x, training = False)
             fake_output = self.discriminator(fake_image, training=True)
-            real_output = self.discriminator(x2, training=True)
+            real_output = self.discriminator(y, training=True)
 
             d_label = tf.concat([tf.zeros_like(fake_output), tf.ones_like(real_output)], axis=0)
             d_loss = self.loss_function_GD(tf.concat([fake_output, real_output], axis=0), d_label)
@@ -70,9 +86,13 @@ class temporalAAE():
         self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
         
         if validate:
-            val_output = self.autoencoder(val_x, training=False)
-            val_loss = self.loss_function_AE(val_x, val_output)
-            val_acc = self.acc_function(val_x, val_output)
+            val_output = self.encoder(val_x, training=False)
+            val_output = Lambda(lambda a: bk.reshape(a, (-1, 4, *self.encoder.output_shape[1:])))(val_output)
+            val_output = self.temporalModel(val_output)
+            val_output = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.output_shape[1:])))(val_output)
+            val_output = self.decoder(val_output, training = False)
+            val_loss = self.loss_function_AE(val_output, val_y)
+            val_acc = self.acc_function(val_output, val_y)
             return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output
         else:
             return ae_loss, ae_acc, d_loss, g_loss, total_loss
@@ -84,7 +104,7 @@ class temporalAAE():
         x2 = train_set[x_idx_list2]
         val_x = val_set[sample(range(val_set.shape[0]), batch_size*2)]
         if validate:
-            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, x2, val_x, self.gfactor, validate=validate)
+            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, val_x, yal_y, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,

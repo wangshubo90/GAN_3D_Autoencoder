@@ -35,12 +35,20 @@ tAAE = temporalAAE(
     lstm_layers=[32,32]
     )
 
-a = tf.ones((3,48,96,96,1))
-a = tAAE.encoder(a)
-a = tAAE.temporalModel(a)
-a = tAAE.decoder(a)
-print(a.shape)
+def readDataset(file, dataSrcDir):
 
-from tensorflow.keras.layers import Input
-from tensorflow.keras.models import Model
+
+# from tensorflow.keras.layers import Lambda
+# from tensorflow.keras import backend as bk
+
+# a = tf.ones((12,48,96,96,1))
+# a = tAAE.encoder(a)
+# a = Lambda(lambda x: bk.reshape(x, (-1, 4, *tAAE.encoder.output_shape[1:])))(a)
+# a = tAAE.temporalModel(a)
+# a = Lambda(lambda x: bk.reshape(x, (-1, *tAAE.encoder.output_shape[1:])))(a)
+# a = tAAE.decoder(a)
+# print(a.shape)
+# a = tf.ones((12,48,96,96,1))
+# tAAE.__train_step__(a, tf.ones((3,48,96,96,1)),a, tf.ones((3,48,96,96,1)), 0.01)
+
 
