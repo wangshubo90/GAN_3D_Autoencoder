@@ -42,8 +42,7 @@ class temporalAAE():
     def _buildTemporal(self,lstm_hidden_layers=[32,32], last_conv=True):
 
         model = Sequential()
-        model.add(Input(shape=(4, *self.encoder.output_shape[1:]), dtype=tf.float32))
-        model.add(Masking(mask_value=0., input_shape=(4, *self.encoder.output_shape[1:])))
+        model.add(Input(shape=(None, *self.encoder.output_shape[1:]), dtype=tf.float32))
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
         for i in lstm_hidden_layers:
             model.add(ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True))
@@ -54,11 +53,13 @@ class temporalAAE():
     @tf.function
     def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
         input = x
+        seqlength = x.shape[1]
         with tf.GradientTape() as ae_tape:
+            x = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.input_shape[1:])))(x)
             x = self.encoder(x, training=False)
-            x = Lambda(lambda a: bk.reshape(a, (-1, 4, *self.encoder.output_shape[1:])))(x)
+            x = Lambda(lambda a: bk.reshape(a, (-1, seqlength, *self.encoder.output_shape[1:])))(x)
             x = self.temporalModel(x)
-            x = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.output_shape[1:])))(x)
+            x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
             fake_image = self.decoder(x, training = False)
             fake_output = self.discriminator(fake_image, training=False)
 
@@ -71,8 +72,9 @@ class temporalAAE():
         self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.temporalModel.trainable_variables))
         x = input
         with tf.GradientTape() as disc_tape:
+            x = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.input_shape[1:])))(x)
             x = self.encoder(x, training=False)
-            x = Lambda(lambda y: bk.reshape(y, (-1, 4, *self.encoder.output_shape[1:])))(x)
+            x = Lambda(lambda y: bk.reshape(y, (-1, seqlength, *self.encoder.output_shape[1:])))(x)
             x = self.temporalModel(x, training=False)
             x = Lambda(lambda y: bk.reshape(y, (-1, *self.encoder.output_shape[1:])))(x)
             fake_image = self.decoder(x, training = False)
@@ -86,8 +88,10 @@ class temporalAAE():
         self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
         
         if validate:
-            val_output = self.encoder(val_x, training=False)
-            val_output = Lambda(lambda a: bk.reshape(a, (-1, 4, *self.encoder.output_shape[1:])))(val_output)
+            seqlength = val_x.shape[1]
+            val_output = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.input_shape[1:])))(val_x)
+            val_output = self.encoder(val_output, training=False)
+            val_output = Lambda(lambda a: bk.reshape(a, (-1, seqlength, *self.encoder.output_shape[1:])))(val_output)
             val_output = self.temporalModel(val_output)
             val_output = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.output_shape[1:])))(val_output)
             val_output = self.decoder(val_output, training = False)
@@ -98,13 +102,13 @@ class temporalAAE():
             return ae_loss, ae_acc, d_loss, g_loss, total_loss
 
     def train_step(self, train_set, val_set, batch_size, validate=True):
-        x_idx_list = sample(range(train_set.shape[0]), batch_size)
-        x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
-        x = train_set[x_idx_list]
-        x2 = train_set[x_idx_list2]
-        val_x = val_set[sample(range(val_set.shape[0]), batch_size*2)]
+        # x_idx_list = sample(range(train_set.shape[0]), batch_size)
+        # x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
+        x, y = next(train_set)
+        val_x, val_y = next(val_set)
+
         if validate:
-            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, val_x, yal_y, self.gfactor, validate=validate)
+            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,
@@ -118,7 +122,7 @@ class temporalAAE():
             
             return history, val_output
         else:
-            ae_loss, ae_acc, d_loss, g_loss, total_loss = self.__train_step__(x, x2, val_x, self.gfactor, validate=validate)
+            ae_loss, ae_acc, d_loss, g_loss, total_loss = self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,
