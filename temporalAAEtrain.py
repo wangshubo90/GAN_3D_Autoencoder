@@ -25,21 +25,27 @@ for gpu in gpus:
     # Invalid device or cannot modify virtual devices once initialized.
         pass
 
-logdir=r"..\Gan_log\Nongan_AAE-TF-no-noise"
-config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
-model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
-best_model = natsorted(model_checkpoints)[-1]
+# logdir=r"..\Gan_log\Nongan_AAE-TF-no-noise"
+# config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
+# model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
+# best_model = natsorted(model_checkpoints)[-1]
+
+config = r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\params-py3.pkl"
+config = pickle.load(open(config, "rb"))
+best_model=r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\checkpoint_018193\AE-18193.h5"
+best_D=r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\checkpoint_018193\D-18193.h5"
 
 tAAE = temporalAAE(
     AAE_config=config, 
     AAE_checkpoint=best_model,
-    lstm_layers=[32,32]
+    D_checkpoint=best_D,
+    lstm_layers=[32]
     )
 
-fileRef = r"../training/seq_file_ref.csv"
-dataSrcDir = r"../data"
+fileRef = r"../data/seq_file_ref.csv"
+dataSrcDir = r"../data/ct/data"
 
-def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randseed=42):
+def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=4, randseed=42):
     """
     subset : choose from "train", "validate", "evaluate"
     """
@@ -75,10 +81,11 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
 traingen = readDatasetGenerator(fileRef, dataSrcDir, "train")
 valgen = readDatasetGenerator(fileRef, dataSrcDir, "validate")
 
-x, y = next(traingen)
-val_x, val_y = next(valgen)
-_=tAAE.__train_step__(x, y, val_x, val_y, 0.01)
+tf.keras.backend.set_value(tAAE.optimizer_autoencoder.learning_rate, 0.01)
+# tAAE.AAE.discriminator.load_weights(best_D)
+# tAAE.discriminator = tAAE.AAE.discriminator
 
+tAAE.train(traingen, valgen, 3, 10000, logdir=r"../data/experiments/temporalAAE-First", logstart=5, logimage=4)
 
 
 

@@ -50,7 +50,7 @@ class temporalAAE():
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
         return model
 
-    @tf.function
+    # @tf.function
     def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
         input = x
         seqlength = x.shape[1]
@@ -97,7 +97,7 @@ class temporalAAE():
             val_output = self.decoder(val_output, training = False)
             val_loss = self.loss_function_AE(val_output, val_y)
             val_acc = self.acc_function(val_output, val_y)
-            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output
+            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], [val_output, val_y]
         else:
             return ae_loss, ae_acc, d_loss, g_loss, total_loss
 
@@ -147,7 +147,7 @@ class temporalAAE():
             if epoch > logstart and history["val_loss"] < loss_min:
                 loss_min = min(history["val_loss"], loss_min)
                 loss_min_epoch = epoch
-                self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
+                self.temporalModel.save(os.path.join(logdir, "temporalModel_epoch_{}.h5".format(epoch)))
                 if logimage:
                     self.save_image(val_output, epoch, logdir, logimage)
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
@@ -166,11 +166,14 @@ class temporalAAE():
         pass
     
     def save_image(self, output, epoch, logdir=".", logimage=8):
-        image = np.squeeze(output.numpy())[:logimage]
+        image = np.squeeze(output[0].numpy())[:logimage]
+        yimage = np.squeeze(output[1])[:logimage]
         shape = image.shape
         image = image[:, shape[1]//2, ...]
+        yimage = yimage[:, shape[1]//2, ...]
         mid = ( shape[0] + 1 ) // 2 
-        image = np.concatenate([image[:mid].reshape((-1, shape[-1])), image[mid:].reshape((-1, shape[-1]))], axis=1)
+        
+        image = np.concatenate([image.reshape((-1, shape[-1])), yimage.reshape((-1, shape[-1]))], axis=1)
 
         fig = plt.figure()
         plt.imshow(image, cmap="gray")

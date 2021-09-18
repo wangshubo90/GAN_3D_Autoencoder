@@ -48,7 +48,7 @@ class AAETrainable(tune.Trainable):
         seed=42
         tf.random.set_seed(seed)
         np.random.seed(seed)
-
+        config["hidden_D"] = config["hidden"]
         #===============set up model================
         self.model = resAAE(**config)
         self.train_set=data["train"]
@@ -68,7 +68,7 @@ class AAETrainable(tune.Trainable):
             self.currentIsBest = False
 
         if self.iteration > 10000:
-            self.model.gfactor = 0.001
+            self.model.gfactor = 0.01
         history = {k:v.numpy() for k, v in history.items()}
         return history
 
@@ -90,8 +90,8 @@ class AAETrainable(tune.Trainable):
 
 #===============set up dataset================
 
-datapath = r'/uctgan/data/udelCT'
-file_reference = r'./data/udelCT/File_reference.csv'
+datapath = r'..\data\ct\Data'
+# file_reference = r'./data/udelCT/File_reference.csv'
 train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
 val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
 
@@ -109,18 +109,18 @@ class MyCallback(Callback):
 
 asha_scheduler = AsyncHyperBandScheduler(
     time_attr='training_iteration',
-    max_t=20000,
-    grace_period=20000,
+    max_t=25000,
+    grace_period=25000,
     reduction_factor=3,
     brackets=1)
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAETF-onoff",
+    name="resAAETF-dynamicGAN-no-flatten",
     metric="val_loss",
     mode="min",
     scheduler=asha_scheduler,
-    local_dir="/uctgan/data/ray_results",
+    local_dir=r"..\data\ray_results",
     verbose=1,
     num_samples=1,
     resources_per_trial={

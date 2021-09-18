@@ -97,7 +97,7 @@ class resAAE():
 
         x = Conv3D(filters=1, kernel_size=3, strides=(1,1,1), padding="SAME", **kwargs)(x)
         # x = GlobalAveragePooling3D()(x)
-        x = Flatten()(x)
+        # x = Flatten()(x)
         # x = Dropout(self.d_dropout)(x)
         # x = Dense(filters[-1]//2)(x)
         # x = Dropout(self.d_dropout)(x)
@@ -199,12 +199,12 @@ class resAAE():
             history, val_output = self.train_step(train_set, val_set, batch_size)
 
             if epoch == 1:
-                loss_min = history["val_loss"]
+                loss_min = history["val_acc"]
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
             
-            if epoch > logstart and history["val_loss"] < loss_min:
-                loss_min = min(history["val_loss"], loss_min)
+            if epoch > logstart and history["val_acc"] < loss_min:
+                loss_min = min(history["val_acc"], loss_min)
                 loss_min_epoch = epoch
                 self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
                 if logimage:
