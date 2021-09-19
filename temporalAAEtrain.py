@@ -39,17 +39,13 @@ tAAE = temporalAAEv2(
     AAE_config=config, 
     AAE_checkpoint=best_model,
     D_checkpoint=best_D,
-    lstm_layers=[32]
+    lstm_layers=[8]
     )
 
 fileRef = r"../data/seq_file_ref.csv"
 dataSrcDir = r"../data/ct/data"
 
-<<<<<<< HEAD
-def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=4, randseed=42):
-=======
 def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randseed=42, seq_length=4):
->>>>>>> bc050094278145b882df86a91506873341ceae85
     """
     subset : choose from "train", "validate", "evaluate"
     """
@@ -87,23 +83,15 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
 
 train_set = readDatasetGenerator(fileRef, dataSrcDir, "train")
 val_set = readDatasetGenerator(fileRef, dataSrcDir, "validate")
-logdir=r"../Gan_log/temporalAAE-first-run"
-summary = tAAE.train(train_set, val_set, 10, logdir=logdir, logstart=1, logimage=3, slices=[slice(None), 36])
+logdir=r"..\data\experiments\temporalAAE-First-8-SD0.3"
+summary = tAAE.train(train_set, val_set, 5000, logdir=logdir, logstart=3000, logimage=4, slices=[slice(None), 36])
 # x, y = next(traingen)
 # val_x, val_y = next(valgen)
 
-<<<<<<< HEAD
-tf.keras.backend.set_value(tAAE.optimizer_autoencoder.learning_rate, 0.01)
-# tAAE.AAE.discriminator.load_weights(best_D)
-# tAAE.discriminator = tAAE.AAE.discriminator
-=======
 # a = np.zeros(shape=(3,4,48,96,96,1))
 # b = np.zeros((3, 48,96,96,1), np.float32)
 # _=tAAE.__train_step__(a, b, a, b, 0.01)
 # _=tAAE.__train_step__(x, y, val_x, val_y, 0.01)
->>>>>>> bc050094278145b882df86a91506873341ceae85
-
-tAAE.train(traingen, valgen, 3, 10000, logdir=r"../data/experiments/temporalAAE-First", logstart=5, logimage=4)
 
 
 

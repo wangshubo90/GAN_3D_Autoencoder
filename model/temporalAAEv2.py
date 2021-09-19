@@ -8,10 +8,11 @@ from tensorflow.keras import layers, Sequential, Model
 from tensorflow.keras import activations
 from tensorflow.keras import backend as bk
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking
+from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking, SpatialDropout3D
 from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.python.keras.layers.core import SpatialDropout2D
 from utils.layers import *
 from utils.mask import compute_mask
 from model.resAAETF import resAAE
@@ -49,6 +50,7 @@ class temporalAAEv2():
         mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
         x = self.encoder(x, training=False)
+        x = SpatialDropout3D(0.3, data_format="channels_last")(x)
         x = Lambda(lambda a: bk.reshape(a, (-1, seq_length, *self.encoder.output_shape[1:])))(x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
         for i in lstm_hidden_layers:
@@ -129,28 +131,32 @@ class temporalAAEv2():
             return history
 
     def train(self, train_set, val_set, n_epochs, logdir=r"data/Gan_training/log", logstart=500, logimage=8, slices=None):
-
+        summary_writer = tf.summary.create_file_writer(logdir)
+        summary_writer.set_as_default()
         for epoch in np.arange(1, n_epochs):
             history, val_output = self.train_step(train_set, val_set)
-
+            with summary_writer.as_default():
+                for k, v in history.items():
+                    tf.summary.scalar(k, data=v, step=epoch)
             if epoch == 1:
-                loss_min = history["val_loss"]
+                loss_min = history["val_acc"]
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
             
-            if epoch > logstart and history["val_loss"] < loss_min:
-                loss_min = min(history["val_loss"], loss_min)
+            if epoch > logstart and history["val_acc"] < loss_min:
+                loss_min = min(history["val_acc"], loss_min)
                 loss_min_epoch = epoch
                 self.temporalModel.save_weights(os.path.join(logdir, "tAAE_epoch_{}.h5".format(epoch)))
                 if logimage:
                     self.save_image(val_output, epoch, logdir, logimage, slices)
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
             
-            print("Epoch -- {} -- CurrentBest -- {} -- val-loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
+            print("Epoch -- {} -- CurrentBest -- {} -- val-acc -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
             
             print("   ".join(["{}: {:.4f}".format(k, v) for k, v in history.items()])
             )
-        
+            
+
         return summary
 
     def __plot_image__():
