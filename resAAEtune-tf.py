@@ -55,7 +55,7 @@ class AAETrainable(tune.Trainable):
         self.val_set=data["val"]
         self.batch_size=batch_size
         self.n_epochs=epochs
-        self.val_loss = 0.01
+        self.val_loss = 2
         self.currentIsBest=False
 
     def step(self):
@@ -74,9 +74,9 @@ class AAETrainable(tune.Trainable):
 
     def save_checkpoint(self, checkpoint_dir):
         if self.currentIsBest:
-            self.model.autoencoder.save(os.path.join(checkpoint_dir,"AE-{}.h5".format(self.iteration)))
-            self.model.discriminator.save(os.path.join(checkpoint_dir,"D-{}.h5".format(self.iteration)))
-            self.model.save_image(self.val_output, self.iteration, logdir=checkpoint_dir)
+            self.model.autoencoder.save(os.path.join(checkpoint_dir,"AE-{}.h5".format (self.iteration)))
+            self.model.discriminator.save(os.path.join(checkpoint_dir,"D-{}.h5".format (self.iteration)))
+            self.model.save_image(self.val_output, self.iteration, logdir=checkpoint_dir, logimage=8, logslices=[slice(None),36])
         return checkpoint_dir
 
     def load_checkpoint(self, checkpoint_dir):
@@ -116,8 +116,8 @@ asha_scheduler = AsyncHyperBandScheduler(
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAETF-dynamicGAN-no-flatten",
-    metric="val_loss",
+    name="resAAETF-noflatten-gf0.01-beta0.6",
+    metric="val_acc",
     mode="min",
     scheduler=asha_scheduler,
     local_dir=r"..\data\ray_results",
@@ -135,7 +135,7 @@ analysis = tune.run(
         "optAE_lr" : 0.001, 
         "optAE_beta" : 0.9,
         "optD_lr" : PiecewiseConstantDecay(boundaries = [10000,], values = [0.00000001, 0.0001]), 
-        "optD_beta" : 0.5,
+        "optD_beta" : 0.9,
         "img_shape": (48, 96, 96, 1), 
         "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
         "loss_GD": BinaryCrossentropy(from_logits=False),
@@ -145,7 +145,7 @@ analysis = tune.run(
         "output_slices": slice(None)
         },
     keep_checkpoints_num = 10,
-    checkpoint_score_attr="min-val_loss",
+    checkpoint_score_attr="min-val_acc",
     checkpoint_freq=1,
     checkpoint_at_end=True,
     fail_fast=True
