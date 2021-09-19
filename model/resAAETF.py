@@ -13,6 +13,7 @@ from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
 from utils.layers import *
 import matplotlib.pyplot as plt
+from skimage.io import imsave
 
 class resAAE():
     #Adversarial Autoencoder
@@ -156,7 +157,7 @@ class resAAE():
             val_output = self.autoencoder(val_x, training=False)
             val_loss = self.loss_function_AE(val_x, val_output)
             val_acc = self.acc_function(val_x, val_output)
-            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output
+            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], [val_output, val_x]
         else:
             return ae_loss, ae_acc, d_loss, g_loss, total_loss
 
@@ -193,25 +194,25 @@ class resAAE():
             
             return history
 
-    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500, logimage=8):
+    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500, logimage=8, logslices=slice(None)):
 
         for epoch in np.arange(1, n_epochs):
             history, val_output = self.train_step(train_set, val_set, batch_size)
 
             if epoch == 1:
-                loss_min = history["val_loss"]
+                loss_min = history["val_acc"]
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
             
-            if epoch > logstart and history["val_loss"] < loss_min:
-                loss_min = min(history["val_loss"], loss_min)
+            if epoch > logstart and history["val_acc"] < loss_min:
+                loss_min = min(history["val_acc"], loss_min)
                 loss_min_epoch = epoch
                 self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
                 if logimage:
-                    self.save_image(val_output, epoch, logdir, logimage)
+                    self.save_image(val_output, epoch, logdir, logimage, logslices=logslices)
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
             
-            print("Epoch -- {} -- CurrentBest -- {} -- val-loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
+            print("Epoch -- {} -- CurrentBest -- {} -- val-acc -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
             
             print("   ".join(["{}: {:.4f}".format(k, v) for k, v in history.items()])
             )
@@ -224,18 +225,27 @@ class resAAE():
     def __tsbd_log__(self, writer, metrics, image=None):
         pass
     
-    def save_image(self, output, epoch, logdir=".", logimage=8):
-        image = np.squeeze(output.numpy())[:logimage]
-        shape = image.shape
-        image = image[:, shape[1]//2, ...]
-        mid = ( shape[0] + 1 ) // 2 
-        image = np.concatenate([image[:mid].reshape((-1, shape[-1])), image[mid:].reshape((-1, shape[-1]))], axis=1)
+    def save_image(self, output, epoch, logdir=".", logimage=8, logslices=slice(None)):
+        image = np.squeeze(output[0].numpy())[:logimage]
+        valimage = np.squeeze(output[1])[:logimage]
 
-        fig = plt.figure()
-        plt.imshow(image, cmap="gray")
-        plt.axis("off")
-        plt.savefig(os.path.join(logdir, "val-image-{}.png".format(epoch)), dpi=300)
-        plt.close()
+        if logslices:
+            image = image[logslices]
+            valimage = valimage[logslices]
+            shape = image.shape
+        else:
+            shape = image.shape
+            image = image[:, shape[1]//2, ...]
+            valimage = valimage[:, shape[1]//2, ...]
+
+        image = np.concatenate([image.reshape((-1, shape[-1])), valimage.reshape((-1, shape[-1]))], axis=1) * 255
+
+        # fig = plt.figure()
+        # plt.imshow(image, cmap="gray")
+        # plt.axis("off")
+        # plt.savefig(os.path.join(logdir, "val-image-{}.png".format(epoch)), dpi=300)
+        # plt.close()
+        imsave(os.path.join(logdir, "val-image-{}.png".format(epoch)), image.astype(np.uint8), check_contrast=False)
 
     def load_model(self):
 
