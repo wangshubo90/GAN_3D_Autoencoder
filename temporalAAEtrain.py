@@ -73,6 +73,7 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
             for idx, (seq, tar) in enumerate(zip(file_seq_list, target_list)):
                 if len(seq) > 4:
                     seq = seq[-4:] 
+                print(tar)
                 for step, file in enumerate(seq):
                     img = sitk.ReadImage(os.path.join(dataSrcDir, file))
                     img = sitk.GetArrayFromImage(img)
@@ -89,7 +90,7 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
 
 train_set = readDatasetGenerator(fileRef, dataSrcDir, "train", batch_size=4)
 val_set = readDatasetGenerator(fileRef, dataSrcDir, "validate", batch_size=6)
-logdir=r"..\data\experiments\temporalAAE-First-spatialLSTM"
+logdir=r"..\data\experiments\temporalAAE-First-spatialLSTM-relu"
 summary = tAAE.train(train_set, val_set, 10000, logdir=logdir, logstart=2000, logimage=3, slices=[slice(None), 36])
 # x, y = next(traingen)
 # val_x, val_y = next(valgen)

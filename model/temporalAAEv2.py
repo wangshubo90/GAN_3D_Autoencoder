@@ -56,7 +56,7 @@ class temporalAAEv2():
         # for i in lstm_hidden_layers:
         #     x = Bidirectional(ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True))(x, mask=mask)
         # x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
-        x = spatialLSTM3D(x, 1)
+        x = spatialLSTM3D(x, mask = mask, lstm_activation="relu")
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
         x = self.decoder(x, training=True)
         model = Model(inputs=input, outputs=x)
