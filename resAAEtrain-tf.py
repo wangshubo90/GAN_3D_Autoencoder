@@ -49,7 +49,7 @@ config={
 #[slice(None), slice(None,15), slice(2,62), slice(2,62), slice(None)]
 model = resAAE(**config)
 # logdir = r"C:\Users\wangs\Documents\35_um_data_100x100x48 niis\Gan_log\Nongan_AAE-TF-no-noise-8-16-16-32"
-logdir = "/uctgan/data/ray_results/train_8-16-16-32-encoder-gan"
+logdir = "\data\ray_results"
 model.autoencoder.load_weights("/uctgan/data/ray_results/train_8-16-16-32-encoder/autoencoder_epoch_5751.h5")
 os.makedirs(logdir, exist_ok=True)
 json.dump({k:str(v) for k, v in config.items()}, open(os.path.join(logdir, "config.json"), "w"))
@@ -65,10 +65,10 @@ pickle.dump(config, open(os.path.join(logdir, "config.pkl"), "wb"))
 #         img = img[:,2:98,2:98,np.newaxis].astype(np.float32) / 255.
 #         dataset[idx] = img
 #     return dataset   
-# datapath = r'..\Data'
-# file_reference = r'..\Training\File_reference.csv'
-datapath = r"/uctgan/data/udelCT"
-file_reference = r"/uctgan/data/Gan_training/File_reference.csv"
+datapath = r'..\data\ct\Data'
+file_reference = r'..\Training\File_reference.csv'
+# datapath = r"/uctgan/data/udelCT"
+# file_reference = r"/uctgan/data/Gan_training/File_reference.csv"
 # img_ls = glob.glob(os.path.join(datapath, "*.nii.gz"))
 # seed = 42
 # random.seed(seed)
@@ -94,6 +94,6 @@ val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
 evl_set = np.load(open(os.path.join(datapath, "evlset.npy"), "rb"))
 
 # test = model.train_step(train_set, val_set, 16)
-history = model.train(train_set, val_set, 16, 15000, logdir=logdir, logstart=2000)
+history = model.train(train_set, val_set, 16, 10000, logdir=logdir, logstart=500)
 
 

@@ -8,19 +8,22 @@ from tensorflow.keras import layers, Sequential, Model
 from tensorflow.keras import activations
 from tensorflow.keras import backend as bk
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking
+from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking, SpatialDropout3D
 from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.python.keras.layers.core import SpatialDropout2D
 from utils.layers import *
+from utils.mask import compute_mask
 from model.resAAETF import resAAE
 import matplotlib.pyplot as plt
 
-class temporalAAE():
+class temporalAAEv2():
     #Adversarial Autoencoder
     def __init__(self, 
                 AAE_config="",
                 AAE_checkpoint="",
+                D_checkpoint=None,
                 lstm_layers=[32,32,32],
                 last_conv=True,
                 **kwargs):
@@ -28,10 +31,12 @@ class temporalAAE():
         self.lstm_layers=lstm_layers
         self.AAE = resAAE(**AAE_config)
         self.AAE.autoencoder.load_weights(AAE_checkpoint)
+        if D_checkpoint:
+            self.AAE.discriminator.load_weights(D_checkpoint)
         self.encoder = self.AAE.encoder
         self.decoder = self.AAE.decoder
         self.discriminator = self.AAE.discriminator
-        self.temporalModel = self._buildTemporal(self.lstm_layers, self.last_conv)
+        self.temporalModel = self._buildTemporal(self.lstm_layers, seq_length=4)
         self.loss_function_AE = self.AAE.loss_function_AE
         self.loss_function_GD = self.AAE.loss_function_GD
         self.acc_function = self.AAE.acc_function
@@ -39,27 +44,30 @@ class temporalAAE():
         self.optimizer_autoencoder = self.AAE.optimizer_autoencoder
         self.optimizer_discriminator = self.AAE.optimizer_discriminator
 
-    def _buildTemporal(self,lstm_hidden_layers=[32,32], last_conv=True):
+    def _buildTemporal(self,lstm_hidden_layers=[32,32], seq_length=4):
 
-        model = Sequential()
-        model.add(Input(shape=(4, *self.encoder.output_shape[1:]), dtype=tf.float32))
-        model.add(Masking(mask_value=0., input_shape=(4, *self.encoder.output_shape[1:])))
+        input = Input(shape=(seq_length, *self.AAE.img_shape), dtype=tf.float32)
+        mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
+        x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
+        x = self.encoder(x, training=False)
+        x = SpatialDropout3D(0.3, data_format="channels_last")(x)
+        x = Lambda(lambda a: bk.reshape(a, (-1, seq_length, *self.encoder.output_shape[1:])))(x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
         for i in lstm_hidden_layers:
-            model.add(ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True))
-        model.add(ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu"))
+            x = ConvLSTM3D(i,3,padding="same",activation="relu", return_sequences=True)(x, mask=mask)
+        x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
+        x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
+        x = self.decoder(x, training=False)
+        model = Model(inputs=input, outputs=x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
         return model
 
     @tf.function
     def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
         input = x
+        seqlength = x.shape[1]
         with tf.GradientTape() as ae_tape:
-            x = self.encoder(x, training=False)
-            x = Lambda(lambda a: bk.reshape(a, (-1, 4, *self.encoder.output_shape[1:])))(x)
-            x = self.temporalModel(x)
-            x = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.output_shape[1:])))(x)
-            fake_image = self.decoder(x, training = False)
+            fake_image = self.temporalModel(x)
             fake_output = self.discriminator(fake_image, training=False)
 
             ae_loss = self.loss_function_AE(y, fake_image)
@@ -71,11 +79,7 @@ class temporalAAE():
         self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.temporalModel.trainable_variables))
         x = input
         with tf.GradientTape() as disc_tape:
-            x = self.encoder(x, training=False)
-            x = Lambda(lambda y: bk.reshape(y, (-1, 4, *self.encoder.output_shape[1:])))(x)
-            x = self.temporalModel(x, training=False)
-            x = Lambda(lambda y: bk.reshape(y, (-1, *self.encoder.output_shape[1:])))(x)
-            fake_image = self.decoder(x, training = False)
+            fake_image = self.temporalModel(x, training=False)
             fake_output = self.discriminator(fake_image, training=True)
             real_output = self.discriminator(y, training=True)
 
@@ -86,25 +90,21 @@ class temporalAAE():
         self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
         
         if validate:
-            val_output = self.encoder(val_x, training=False)
-            val_output = Lambda(lambda a: bk.reshape(a, (-1, 4, *self.encoder.output_shape[1:])))(val_output)
-            val_output = self.temporalModel(val_output)
-            val_output = Lambda(lambda a: bk.reshape(a, (-1, *self.encoder.output_shape[1:])))(val_output)
-            val_output = self.decoder(val_output, training = False)
+            val_output = self.temporalModel(val_x, training = False)
             val_loss = self.loss_function_AE(val_output, val_y)
             val_acc = self.acc_function(val_output, val_y)
-            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output
+            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], [val_output, val_y]
         else:
             return ae_loss, ae_acc, d_loss, g_loss, total_loss
 
-    def train_step(self, train_set, val_set, batch_size, validate=True):
-        x_idx_list = sample(range(train_set.shape[0]), batch_size)
-        x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
-        x = train_set[x_idx_list]
-        x2 = train_set[x_idx_list2]
-        val_x = val_set[sample(range(val_set.shape[0]), batch_size*2)]
+    def train_step(self, train_set, val_set, validate=True):
+        # x_idx_list = sample(range(train_set.shape[0]), batch_size)
+        # x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
+        x, y = next(train_set)
+        val_x, val_y = next(val_set)
+
         if validate:
-            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, val_x, yal_y, self.gfactor, validate=validate)
+            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,
@@ -118,7 +118,7 @@ class temporalAAE():
             
             return history, val_output
         else:
-            ae_loss, ae_acc, d_loss, g_loss, total_loss = self.__train_step__(x, x2, val_x, self.gfactor, validate=validate)
+            ae_loss, ae_acc, d_loss, g_loss, total_loss = self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,
@@ -130,29 +130,33 @@ class temporalAAE():
             
             return history
 
-    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500, logimage=8):
-
+    def train(self, train_set, val_set, n_epochs, logdir=r"data/Gan_training/log", logstart=500, logimage=8, slices=None):
+        summary_writer = tf.summary.create_file_writer(logdir)
+        summary_writer.set_as_default()
         for epoch in np.arange(1, n_epochs):
-            history, val_output = self.train_step(train_set, val_set, batch_size)
-
+            history, val_output = self.train_step(train_set, val_set)
+            with summary_writer.as_default():
+                for k, v in history.items():
+                    tf.summary.scalar(k, data=v, step=epoch)
             if epoch == 1:
-                loss_min = history["val_loss"]
+                loss_min = history["val_acc"]
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
             
-            if epoch > logstart and history["val_loss"] < loss_min:
-                loss_min = min(history["val_loss"], loss_min)
+            if epoch > logstart and history["val_acc"] < loss_min:
+                loss_min = min(history["val_acc"], loss_min)
                 loss_min_epoch = epoch
-                self.autoencoder.save(os.path.join(logdir, "autoencoder_epoch_{}.h5".format(epoch)))
+                self.temporalModel.save_weights(os.path.join(logdir, "tAAE_epoch_{}.h5".format(epoch)))
                 if logimage:
-                    self.save_image(val_output, epoch, logdir, logimage)
+                    self.save_image(val_output, epoch, logdir, logimage, slices)
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
             
-            print("Epoch -- {} -- CurrentBest -- {} -- val-loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
+            print("Epoch -- {} -- CurrentBest -- {} -- val-acc -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
             
             print("   ".join(["{}: {:.4f}".format(k, v) for k, v in history.items()])
             )
-        
+            
+
         return summary
 
     def __plot_image__():
@@ -161,12 +165,17 @@ class temporalAAE():
     def __tsbd_log__(self, writer, metrics, image=None):
         pass
     
-    def save_image(self, output, epoch, logdir=".", logimage=8):
-        image = np.squeeze(output.numpy())[:logimage]
+    def save_image(self, output, epoch, logdir=".", logimage=8, slices=None):
+        image = np.squeeze(output[0].numpy())[:logimage]
+        valimage = np.squeeze(output[1])[:logimage]
         shape = image.shape
-        image = image[:, shape[1]//2, ...]
-        mid = ( shape[0] + 1 ) // 2 
-        image = np.concatenate([image[:mid].reshape((-1, shape[-1])), image[mid:].reshape((-1, shape[-1]))], axis=1)
+        if slices:
+            image = image[slices]
+            valimage = valimage[slices]
+        else:
+            image = image[:, shape[1]//2, ...]
+            valimage = valimage[:, shape[1]//2, ...]
+        image = np.concatenate([image.reshape((-1, shape[-1])), valimage.reshape((-1, shape[-1]))], axis=1)
 
         fig = plt.figure()
         plt.imshow(image, cmap="gray")

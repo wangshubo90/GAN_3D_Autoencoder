@@ -10,7 +10,7 @@ from natsort import natsorted
 # checkpoint = "checkpoint_002479"
 # param = "params.json"
 # config = json.load(open(os.path.join(checkpoint_dir, param)))
-logdir=r"..\Gan_log\Nongan_AAE-TF-no-noise"
+logdir=r"..\data\experiments\Ablation_AAE-TF-no-noise-GAN-continue"
 config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
 model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
 best_model = natsorted(model_checkpoints)[-1]
@@ -26,15 +26,16 @@ model.autoencoder.load_weights(best_model)
 
 # datapath = r'/uctgan/data/udelCT'
 # file_reference = r'./data/udelCT/File_reference.csv'
-datapath = r'..\Data'
-file_reference = r'..\Training\File_reference.csv'
+# datapath = r'..\Data'
+# file_reference = r'..\Training\File_reference.csv'
+datapath = r'..\data\ct\Data'
+train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
+val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
+# file_reference = r'..\data\ct\File_reference.csv'
 # seed=42
 # img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
 # train_img, test_img = train_test_split(img_ls, test_size=0.3, random_state=seed)
 # val_img, evl_img = train_test_split(test_img, test_size=0.5, random_state=seed)
-# train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
-val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
-# evl_set = np.load(open(os.path.join(datapath, "evlset.npy"), "rb"))
 
 for i in range(-11, -8):
     image = val_set[i]
@@ -48,3 +49,5 @@ for i in range(-11, -8):
     ax[1,1].imshow(gen_image[::-1,50,:],cmap="gray")
     ax[0,2].imshow(image[::-1,:,60],cmap="gray")
     ax[1,2].imshow(gen_image[::-1,:,60],cmap="gray")
+    plt.show()
+    plt.close()

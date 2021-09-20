@@ -48,14 +48,14 @@ class AAETrainable(tune.Trainable):
         seed=42
         tf.random.set_seed(seed)
         np.random.seed(seed)
-
+        config["hidden_D"] = config["hidden"]
         #===============set up model================
         self.model = resAAE(**config)
         self.train_set=data["train"]
         self.val_set=data["val"]
         self.batch_size=batch_size
         self.n_epochs=epochs
-        self.val_loss = 0.01
+        self.val_loss = 2
         self.currentIsBest=False
 
     def step(self):
@@ -68,14 +68,15 @@ class AAETrainable(tune.Trainable):
             self.currentIsBest = False
 
         if self.iteration > 10000:
-            self.model.gfactor = 0.001
+            self.model.gfactor = 0.01
         history = {k:v.numpy() for k, v in history.items()}
         return history
 
     def save_checkpoint(self, checkpoint_dir):
         if self.currentIsBest:
-            self.model.autoencoder.save(os.path.join(checkpoint_dir,"AE.h5"))
-            self.model.save_image(self.val_output, self.iteration, logdir=checkpoint_dir)
+            self.model.autoencoder.save(os.path.join(checkpoint_dir,"AE-{}.h5".format (self.iteration)))
+            self.model.discriminator.save(os.path.join(checkpoint_dir,"D-{}.h5".format (self.iteration)))
+            self.model.save_image(self.val_output, self.iteration, logdir=checkpoint_dir, logimage=8, logslices=[slice(None),36])
         return checkpoint_dir
 
     def load_checkpoint(self, checkpoint_dir):
@@ -89,8 +90,8 @@ class AAETrainable(tune.Trainable):
 
 #===============set up dataset================
 
-datapath = r'/uctgan/data/udelCT'
-file_reference = r'./data/udelCT/File_reference.csv'
+datapath = r'..\data\ct\Data'
+# file_reference = r'./data/udelCT/File_reference.csv'
 train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
 val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
 
@@ -108,18 +109,18 @@ class MyCallback(Callback):
 
 asha_scheduler = AsyncHyperBandScheduler(
     time_attr='training_iteration',
-    max_t=20000,
-    grace_period=20000,
+    max_t=25000,
+    grace_period=25000,
     reduction_factor=3,
     brackets=1)
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAETF-onoff",
-    metric="val_loss",
+    name="resAAETF-noflatten-gf0.01-beta0.6",
+    metric="val_acc",
     mode="min",
     scheduler=asha_scheduler,
-    local_dir="/uctgan/data/ray_results",
+    local_dir=r"..\data\ray_results",
     verbose=1,
     num_samples=1,
     resources_per_trial={
@@ -134,7 +135,7 @@ analysis = tune.run(
         "optAE_lr" : 0.001, 
         "optAE_beta" : 0.9,
         "optD_lr" : PiecewiseConstantDecay(boundaries = [10000,], values = [0.00000001, 0.0001]), 
-        "optD_beta" : 0.5,
+        "optD_beta" : 0.9,
         "img_shape": (48, 96, 96, 1), 
         "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
         "loss_GD": BinaryCrossentropy(from_logits=False),
@@ -144,7 +145,7 @@ analysis = tune.run(
         "output_slices": slice(None)
         },
     keep_checkpoints_num = 10,
-    checkpoint_score_attr="min-val_loss",
+    checkpoint_score_attr="min-val_acc",
     checkpoint_freq=1,
     checkpoint_at_end=True,
     fail_fast=True

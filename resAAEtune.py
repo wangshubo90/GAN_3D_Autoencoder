@@ -106,8 +106,8 @@ def read_data(file_ls):
         dataset[idx] = img
     return dataset
 
-datapath = r'/uctgan/data/udelCT'
-file_reference = r'./data/udelCT/File_reference.csv'
+datapath = r'..\data\ct\data'
+file_reference = r'..\data\ct\File_reference.csv'
 seed=42
 img_ls = glob.glob(os.path.join(datapath, "*.nii*"))
 random.seed(seed)
