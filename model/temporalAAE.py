@@ -21,6 +21,7 @@ class temporalAAE():
     def __init__(self, 
                 AAE_config="",
                 AAE_checkpoint="",
+                D_checkpoint=None,
                 lstm_layers=[32,32,32],
                 last_conv=True,
                 **kwargs):
@@ -28,6 +29,8 @@ class temporalAAE():
         self.lstm_layers=lstm_layers
         self.AAE = resAAE(**AAE_config)
         self.AAE.autoencoder.load_weights(AAE_checkpoint)
+        if D_checkpoint:
+            self.AAE.discriminator.load_weights(D_checkpoint)
         self.encoder = self.AAE.encoder
         self.decoder = self.AAE.decoder
         self.discriminator = self.AAE.discriminator

@@ -1,3 +1,4 @@
+from model.temporalAAEv2 import temporalAAEv2
 import os, glob, json, pickle
 #================ Environment variables ================
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0' 
@@ -41,11 +42,11 @@ tAAE = temporalAAEv2(
     AAE_config=config, 
     AAE_checkpoint=best_model,
     D_checkpoint=best_D,
-    lstm_layers=[16,16,16]
+    lstm_layers=[128,128]
     )
 
-
-tAAE.optimizer_discriminator=Adam(PiecewiseConstantDecay(boundaries = [1000,4000], values = [0.00000001, 0.00001, 0.0001]))
+# tAAE.optimizer_autoencoder=Adam(learning_rate=0.001)
+tAAE.optimizer_discriminator=Adam(PiecewiseConstantDecay(boundaries = [1000,4000], values = [0.00001, 0.0001, 0.001]))
 tAAE.gfactor=0.001
 
 fileRef = r"../data/seq_file_ref.csv"
@@ -73,7 +74,6 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
             for idx, (seq, tar) in enumerate(zip(file_seq_list, target_list)):
                 if len(seq) > 4:
                     seq = seq[-4:] 
-                print(tar)
                 for step, file in enumerate(seq):
                     img = sitk.ReadImage(os.path.join(dataSrcDir, file))
                     img = sitk.GetArrayFromImage(img)
@@ -88,10 +88,10 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
             yield xdata, ydata
     return generator()
 
-train_set = readDatasetGenerator(fileRef, dataSrcDir, "train", batch_size=4)
-val_set = readDatasetGenerator(fileRef, dataSrcDir, "validate", batch_size=6)
-logdir=r"..\data\experiments\temporalAAE-First-spatialLSTM-relu"
-summary = tAAE.train(train_set, val_set, 10000, logdir=logdir, logstart=2000, logimage=3, slices=[slice(None), 36])
+train_set = readDatasetGenerator(fileRef, dataSrcDir, "train", batch_size=8)
+val_set = readDatasetGenerator(fileRef, dataSrcDir, "validate", batch_size=12)
+logdir=r"..\data\experiments\temporalAAE-128-128-batchnorm-tanh-gan"
+summary = tAAE.train(train_set, val_set, 25000, logdir=logdir, logstart=500, logimage=6, slices=[slice(None), 36])
 # x, y = next(traingen)
 # val_x, val_y = next(valgen)
 

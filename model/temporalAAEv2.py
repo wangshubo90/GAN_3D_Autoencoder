@@ -50,25 +50,27 @@ class temporalAAEv2():
         mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
         x = self.encoder(x, training=True)
-        x = SpatialDropout3D(0.2, data_format="channels_last")(x)
+        x = SpatialDropout3D(0, data_format="channels_last")(x)
         x = Lambda(lambda a: bk.reshape(a, (-1, seq_length, *self.encoder.output_shape[1:])))(x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
-        # for i in lstm_hidden_layers:
-        #     x = Bidirectional(ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True))(x, mask=mask)
-        # x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
-        x = spatialLSTM3D(x, mask = mask, lstm_activation="relu")
+        for i in lstm_hidden_layers:
+            x = ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True)(x, mask=mask)
+            # x = BatchNormalization()(x)
+        x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
+        x = BatchNormalization()(x)
+        # x = spatialLSTM3D(x, mask = mask, lstm_activation="tanh")
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
         x = self.decoder(x, training=True)
         model = Model(inputs=input, outputs=x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
         return model
 
-    @tf.function
+    # @tf.function
     def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
         input = x
         seqlength = x.shape[1]
         with tf.GradientTape() as ae_tape:
-            fake_image = self.temporalModel(x)
+            fake_image = self.temporalModel(x, training=True)
             fake_output = self.discriminator(fake_image, training=False)
 
             ae_loss = self.loss_function_AE(y, fake_image)

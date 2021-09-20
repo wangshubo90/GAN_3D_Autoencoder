@@ -150,23 +150,23 @@ def spatialLSTM3D(input, mask, lstm_activation='tanh'):
     '''
         input shape: [batch, seq_step, depth, height, width, channel]
     '''
-    org_shape = bk.shape(input)
-    input = bk.reshape(input, shape=(org_shape[0], org_shape[1], org_shape[2]*org_shape[3]*org_shape[4], org_shape[-1])) # shape [batch, step, 3dflatten, channel]
-    new_shape = bk.shape(input)
-    lstmlayer1 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
-    lstmlayer2 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
-    lstmlayer3 = LSTM(org_shape[-1])
+    org_shape = bk.int_shape(input)
+    input = bk.reshape(input, shape=(-1, org_shape[1], org_shape[2]*org_shape[3]*org_shape[4], org_shape[-1])) # shape [batch, step, 3dflatten, channel]
+    new_shape = bk.int_shape(input)
+    # lstmlayer1 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
+    # lstmlayer2 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
+    # lstmlayer3 = LSTM(org_shape[-1], activation='relu')
 
     spatialpath = []
     for i in range(new_shape[2]):
         x = Lambda(lambda z: z[:,:,i,:])(input)
-        x = lstmlayer1(x, mask=mask)
-        x = lstmlayer2(x, mask=mask)
-        x = lstmlayer3(x, mask=mask)   # x shape : [batch, channel]
+        # x = lstmlayer1(x, mask=mask)
+        # x = lstmlayer2(x, mask=mask)
+        x = LSTM(org_shape[-1], activation='sigmoid')(x, mask=mask)   # x shape : [batch, channel]
         x = tf.expand_dims(x, axis=1)
         spatialpath.append(x)
     x = concatenate(spatialpath, axis=1)
-    x = bk.reshape(x, shape=(org_shape[0], *org_shape[2:]))
+    x = bk.reshape(x, shape=(-1, *org_shape[2:]))
     return x
     
 
