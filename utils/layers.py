@@ -151,7 +151,7 @@ def spatialLSTM3D(input, mask, lstm_activation='tanh'):
         input shape: [batch, seq_step, depth, height, width, channel]
     '''
     org_shape = input.shape
-    input = bk.reshape(input, shape=(org_shape[0], org_shape[1],  -1, org_shape[-1])) # shape [batch, step, 3dflatten, channel]
+    input = bk.reshape(input, shape=(org_shape[0], org_shape[1], org_shape[2]*org_shape[3]*org_shape[4], org_shape[-1])) # shape [batch, step, 3dflatten, channel]
     new_shape = input.shape
     lstmlayer1 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
     lstmlayer2 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
