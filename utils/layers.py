@@ -3,9 +3,8 @@ from functools import partial
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.python.keras.backend import conv3d, relu
-from tensorflow.keras.layers import Conv3DTranspose, Conv3D, BatchNormalization, Activation
-from tensorflow.keras.layers import Add
+from tensorflow.keras import backend as bk
+from tensorflow.keras.layers import Conv3DTranspose, Conv3D, BatchNormalization, Activation, Add, LSTM, Lambda, concatenate
 from tensorflow.keras.activations import relu
 from tensorflow.python.keras.layers.convolutional import Conv1DTranspose
 
@@ -146,6 +145,30 @@ class GlobalSumPooling3D():
         
     def __call__(self):
         pass
+
+def spatialLSTM3D(input, filters):
+    '''
+        input shape: [batch, seq_step, depth, height, width, channel]
+    '''
+    org_shape = input.shape
+    input = bk.reshape(input, shape=(org_shape[0], org_shape[1],  -1, org_shape[-1])) # shape [batch, step, 3dflatten, channel]
+    new_shape = input.shape
+    lstmlayer1 = LSTM(org_shape[-1], return_sequences=True)
+    lstmlayer2 = LSTM(org_shape[-1], return_sequences=True)
+    lstmlayer3 = LSTM(org_shape[-1])
+
+    spatialpath = []
+    for i in range(new_shape[2]):
+        x = Lambda(lambda z: z[:,:,i,:])(input)
+        x = lstmlayer1(x)
+        x = lstmlayer2(x)
+        x = lstmlayer3(x)   # x shape : [batch, channel]
+        x = tf.expand_dims(x, axis=1)
+        spatialpath.append(x)
+    x = concatenate(spatialpath, axis=1)
+    x = bk.reshape(x, shape=(org_shape[0], *org_shape[2:]))
+    return x
+    
 
 if __name__=="__main__":
 
