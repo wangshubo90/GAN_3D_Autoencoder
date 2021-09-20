@@ -25,25 +25,25 @@ for gpu in gpus:
     # Invalid device or cannot modify virtual devices once initialized.
         pass
 
-# logdir=r"..\Gan_log\Nongan_AAE-TF-no-noise"
-# config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
-# model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
-# best_model = natsorted(model_checkpoints)[-1]
+logdir=r"..\Gan_log\Nongan_AAE-TF-no-noise"
+config = pickle.load(open(os.path.join(logdir, "config.pkl"), "rb"))
+model_checkpoints = glob.glob(os.path.join(logdir, "*.h5"))
+best_model = natsorted(model_checkpoints)[-1]
 
-config = r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\params-py3.pkl"
-config = pickle.load(open(config, "rb"))
-best_model=r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\checkpoint_018193\AE-18193.h5"
-best_D=r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\checkpoint_018193\D-18193.h5"
+# config = r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\params-py3.pkl"
+# config = pickle.load(open(config, "rb"))
+# best_model=r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\checkpoint_018193\AE-18193.h5"
+# best_D=r"D:\gitrepos\data\ray_results\resAAETF-dynamicGAN-no-flatten\AAETrainable_dca02_00001_1_hidden=(8, 16, 16, 32)_2021-09-11_15-45-48\checkpoint_018193\D-18193.h5"
 
 tAAE = temporalAAEv2(
     AAE_config=config, 
     AAE_checkpoint=best_model,
-    D_checkpoint=best_D,
+    D_checkpoint=None,
     lstm_layers=[8]
     )
 
-fileRef = r"../data/seq_file_ref.csv"
-dataSrcDir = r"../data/ct/data"
+fileRef = r"../training/seq_file_ref.csv"
+dataSrcDir = r"../data"
 
 def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randseed=42, seq_length=4):
     """
@@ -67,6 +67,7 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
             for idx, (seq, tar) in enumerate(zip(file_seq_list, target_list)):
                 if len(seq) > 4:
                     seq = seq[-4:] 
+                print(tar)
                 for step, file in enumerate(seq):
                     img = sitk.ReadImage(os.path.join(dataSrcDir, file))
                     img = sitk.GetArrayFromImage(img)
@@ -84,7 +85,7 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
 train_set = readDatasetGenerator(fileRef, dataSrcDir, "train")
 val_set = readDatasetGenerator(fileRef, dataSrcDir, "validate")
 logdir=r"..\data\experiments\temporalAAE-First-8-SD0.3"
-summary = tAAE.train(train_set, val_set, 5000, logdir=logdir, logstart=3000, logimage=4, slices=[slice(None), 36])
+# summary = tAAE.train(train_set, val_set, 5000, logdir=logdir, logstart=3000, logimage=4, slices=[slice(None), 36])
 # x, y = next(traingen)
 # val_x, val_y = next(valgen)
 
