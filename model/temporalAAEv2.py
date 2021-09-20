@@ -8,7 +8,7 @@ from tensorflow.keras import layers, Sequential, Model
 from tensorflow.keras import activations
 from tensorflow.keras import backend as bk
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking, SpatialDropout3D
+from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking, SpatialDropout3D, Bidirectional
 from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
@@ -49,15 +49,16 @@ class temporalAAEv2():
         input = Input(shape=(seq_length, *self.AAE.img_shape), dtype=tf.float32)
         mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
-        x = self.encoder(x, training=False)
-        x = SpatialDropout3D(0.3, data_format="channels_last")(x)
+        x = self.encoder(x, training=True)
+        x = SpatialDropout3D(0.2, data_format="channels_last")(x)
         x = Lambda(lambda a: bk.reshape(a, (-1, seq_length, *self.encoder.output_shape[1:])))(x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
-        for i in lstm_hidden_layers:
-            x = ConvLSTM3D(i,3,padding="same",activation="relu", return_sequences=True)(x, mask=mask)
-        x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
+        # for i in lstm_hidden_layers:
+        #     x = Bidirectional(ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True))(x, mask=mask)
+        # x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
+        x = spatialLSTM3D(x, 1)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
-        x = self.decoder(x, training=False)
+        x = self.decoder(x, training=True)
         model = Model(inputs=input, outputs=x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
         return model

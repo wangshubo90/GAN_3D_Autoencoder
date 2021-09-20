@@ -3,6 +3,8 @@ import os, glob, json, pickle
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0' 
 os.environ['AUTOGRAPH_VERBOSITY'] = '0'
 import tensorflow as tf
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 
 import SimpleITK as sitk 
 import numpy as np
@@ -39,8 +41,12 @@ tAAE = temporalAAEv2(
     AAE_config=config, 
     AAE_checkpoint=best_model,
     D_checkpoint=best_D,
-    lstm_layers=[8]
+    lstm_layers=[16,16,16]
     )
+
+
+tAAE.optimizer_discriminator=Adam(PiecewiseConstantDecay(boundaries = [1000,4000], values = [0.00000001, 0.00001, 0.0001]))
+tAAE.gfactor=0.001
 
 fileRef = r"../data/seq_file_ref.csv"
 dataSrcDir = r"../data/ct/data"
@@ -81,10 +87,10 @@ def readDatasetGenerator(file, dataSrcDir, subset="train", batch_size=3, randsee
             yield xdata, ydata
     return generator()
 
-train_set = readDatasetGenerator(fileRef, dataSrcDir, "train")
-val_set = readDatasetGenerator(fileRef, dataSrcDir, "validate")
-logdir=r"..\data\experiments\temporalAAE-First-8-SD0.3"
-summary = tAAE.train(train_set, val_set, 5000, logdir=logdir, logstart=3000, logimage=4, slices=[slice(None), 36])
+train_set = readDatasetGenerator(fileRef, dataSrcDir, "train", batch_size=4)
+val_set = readDatasetGenerator(fileRef, dataSrcDir, "validate", batch_size=6)
+logdir=r"..\data\experiments\temporalAAE-First-spatialLSTM"
+summary = tAAE.train(train_set, val_set, 10000, logdir=logdir, logstart=2000, logimage=3, slices=[slice(None), 36])
 # x, y = next(traingen)
 # val_x, val_y = next(valgen)
 
