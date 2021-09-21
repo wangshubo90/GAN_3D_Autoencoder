@@ -74,33 +74,57 @@ def laplacianFilter3D(input):
     output=tf.nn.conv3d(input, kernel, strides=(1,1,1,1,1), padding="SAME")
     return output
 
-def sharpenFilter3D(input):
-    kernel = -1*np.ones(shape=(3,3,3,1,1),dtype=np.float32)
-    kernel[1,1,1,...] = 32
-    kernel=tf.constant(kernel)
+class sharpenFilter3D:
+    def __init__(self, channel_n=1, enhancement=32):
+        kernel = np.zeros(shape=(3,3,3,channel_n,1), dtype=np.float32)
+        kernel[1,1] = 1
+        kernel[:,1, 1] = 1
+        kernel[1,:,1] = 1
+        kernel[1,1,1,...] = enhancement
+        self.kernel=tf.constant(kernel)
+    
+    def __call__(self, input):
+        output=tf.nn.conv3d(input, self.kernel, strides=(1,1,1,1,1), padding="SAME") 
+        return output
 
-    output=tf.nn.conv3d(input, kernel, strides=(1,1,1,1,1), padding="SAME")
-    return output
+class sharpenFilter2D:
+    def __init__(self, channel_n=1, enhancement=12):
+        kernel = -1*np.ones(shape=(3,3,channel_n,1), dtype=np.float32)
+        kernel[1,1] = enhancement
+        self.kernel=tf.constant(kernel)
+    
+    def __call__(self, input):
+        output=tf.nn.conv2d(input, self.kernel, strides=(1,1,1,1,1), padding="SAME") 
+        return output
 
 if __name__=="__main__":
     #test 1: zeros tensor input
     print("test 1: zeros tensor input")
     test = tf.zeros((1,6,6,6,1))
-    gaussianFilter3D(test,0.1,3)
+    _ = gaussianFilter3D(0.5,3)(test)
 
     #test 2: image input test
     print("test 2: image input test")
     import SimpleITK as sitk
-    image = sitk.GetArrayFromImage(sitk.ReadImage(r"/uCTGan/data/unitTest/test_t1_brain.nii.gz"))
+    import matplotlib.pyplot as plt
+    image = sitk.GetArrayFromImage(sitk.ReadImage(r"/uctgan/data/leuko/dataset/0E5d/02nov01/nt2.nii.gz"))
     print(image.shape)
     tfimage = tf.convert_to_tensor(image)    
     tfimage = tfimage[tf.newaxis,:,:,:,tf.newaxis]
-    output = gaussianFilter3D(tfimage,0.5,3).numpy()
-    output= np.squeeze(output)
-    print(output.shape)
-    sitk.WriteImage(sitk.GetImageFromArray(output), r"/uCTGan/data/unitTest/test_gaussian.nii.gz")
 
-    output2 = sobelFilter3D(tfimage).numpy()
-    output2 = np.squeeze(output2)
-    sitk.WriteImage(sitk.GetImageFromArray(output2), r"/uCTGan/data/unitTest/test_sobel.nii.gz")
+    for i in range(26, 32):
+        output=np.squeeze(sharpenFilter3D(enhancement=i)(tfimage).numpy())
+        plt.figure()
+        plt.imshow(np.concatenate([image[7], output[7]], axis=-1), cmap="gray")
+        plt.show()
+        plt.close()
+
+    # output = gaussianFilter3D(tfimage,0.5,3).numpy()
+    # output= np.squeeze(output)
+    # print(output.shape)
+    # sitk.WriteImage(sitk.GetImageFromArray(output), r"/uCTGan/data/unitTest/test_gaussian.nii.gz")
+
+    # output2 = sobelFilter3D(tfimage).numpy()
+    # output2 = np.squeeze(output2)
+    # sitk.WriteImage(sitk.GetImageFromArray(output2), r"/uCTGan/data/unitTest/test_sobel.nii.gz")
     #test 3: train step test
