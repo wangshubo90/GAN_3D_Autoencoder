@@ -161,12 +161,16 @@ class resAAE():
         else:
             return ae_loss, ae_acc, d_loss, g_loss, total_loss
 
-    def train_step(self, train_set, val_set, batch_size, validate=True):
-        x_idx_list = sample(range(train_set.shape[0]), batch_size)
-        x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
-        x = train_set[x_idx_list]
-        x2 = train_set[x_idx_list2]
-        val_x = val_set[sample(range(val_set.shape[0]), batch_size*2)]
+    def fetch_batch(self, trainset, valset, batch_size=None):
+        x_idx_list = sample(range(trainset.shape[0]), batch_size)
+        x_idx_list2 = sample(range(trainset.shape[0]), batch_size)
+        x = trainset[x_idx_list]
+        x2 = trainset[x_idx_list2]
+        val_x = valset[sample(range(valset.shape[0]), batch_size*2)]
+        return x, x2, val_x
+
+    def train_step(self, train_set, val_set, batch_size=None, validate=True):
+        x, x2, val_x = self.fetch_batch(train_set, val_set, batch_size=batch_size)
         if validate:
             [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, x2, val_x, self.gfactor, validate=validate)
             
@@ -194,10 +198,10 @@ class resAAE():
             
             return history
 
-    def train(self, train_set, val_set, batch_size, n_epochs, logdir=r"data/Gan_training/log", logstart=500, logimage=8, logslices=slice(None)):
+    def train(self, train_set, val_set, n_epochs, batch_size=None, logdir=r"data/Gan_training/log", logstart=500, logimage=8, logslices=slice(None)):
 
         for epoch in np.arange(1, n_epochs):
-            history, val_output = self.train_step(train_set, val_set, batch_size)
+            history, val_output = self.train_step(train_set, val_set, batch_size=batch_size)
 
             if epoch == 1:
                 loss_min = history["val_acc"]
