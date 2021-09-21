@@ -45,7 +45,9 @@ class temporalAAEv2():
         self.optimizer_discriminator = self.AAE.optimizer_discriminator
 
     def _buildTemporal(self,lstm_hidden_layers=[32,32], seq_length=4):
-
+        lstmskiplayers = [self.encoder.get_layer(name=layername) for layername in [
+                "tf.nn.relu_2", "tf.nn.relu_4", "tf.nn.relu_6"
+            ]]
         input = Input(shape=(seq_length, *self.AAE.img_shape), dtype=tf.float32)
         mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
