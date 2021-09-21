@@ -88,7 +88,7 @@ def residual_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), paddi
     else:
         pass
     
-    x = x + identity
+    x = tf.keras.layers.Add()([x , identity])
     x = activate(x)
     
     return x
@@ -113,7 +113,7 @@ def resBN_block(input, filters = 64, kernel_size= 3, strides = (1,1,1),  padding
     else:
         pass
     
-    x = x + identity
+    x = tf.keras.layers.Add()([x , identity])
     x = activate(x)
     
     return x
@@ -134,7 +134,7 @@ def resTP_block(input, filters = 64, kernel_size= 3, strides = (1,1,1), padding 
     else:
         pass
     
-    x = x + identity
+    x = tf.keras.layers.Add()([x , identity])
     x = activate(x)
 
     return x
