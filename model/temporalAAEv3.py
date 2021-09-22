@@ -13,12 +13,13 @@ from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.python.keras.layers.core import SpatialDropout2D
+from tensorflow.python.ops.gen_batch_ops import Batch
 from utils.layers import *
 from utils.mask import compute_mask
 from model.resAAETF import resAAE
 import matplotlib.pyplot as plt
 
-class temporalAAEv2():
+class temporalAAEv3():
     #Adversarial Autoencoder
     def __init__(self, 
                 AAE_config="",
@@ -33,7 +34,10 @@ class temporalAAEv2():
         self.AAE.autoencoder.load_weights(AAE_checkpoint)
         if D_checkpoint:
             self.AAE.discriminator.load_weights(D_checkpoint)
-        self.encoder = self.AAE.encoder
+        lstmskiplayers = [self.AAE.encoder.get_layer(name=layername) for layername in [
+                "tf.nn.relu_2", "tf.nn.relu_4", "tf.nn.relu_6"
+            ]]
+        self.encoder = Model(inputs=self.AAE.encoder.input, outputs=[layer.output for layer in lstmskiplayers])
         self.decoder = self.AAE.decoder
         self.discriminator = self.AAE.discriminator
         self.temporalModel = self._buildTemporal(self.lstm_layers, seq_length=4)
@@ -44,21 +48,35 @@ class temporalAAEv2():
         self.optimizer_autoencoder = self.AAE.optimizer_autoencoder
         self.optimizer_discriminator = self.AAE.optimizer_discriminator
 
-    def _buildTemporal(self,lstm_hidden_layers=[32,32], seq_length=4):
-        lstmskiplayers = [self.encoder.get_layer(name=layername) for layername in [
-                "tf.nn.relu_2", "tf.nn.relu_4", "tf.nn.relu_6"
-            ]]
+    def _buildTemporal(self, lstm_hidden_layers=[32,32], seq_length=4):
+        
         input = Input(shape=(seq_length, *self.AAE.img_shape), dtype=tf.float32)
         mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
-        x = self.encoder(x, training=False)
-        x = SpatialDropout3D(0.3, data_format="channels_last")(x)
-        x = Lambda(lambda a: bk.reshape(a, (-1, seq_length, *self.encoder.output_shape[1:])))(x)
+        x1,x2,x3 = self.encoder(x, training=False)
+        # x = SpatialDropout3D(0.3, data_format="channels_last")(x)
+        x1, x2, x3 = [Lambda(lambda a: bk.reshape(a, (-1, seq_length, *a.shape[1:])))(x_) for x_ in [x1,x2,x3]]
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
-        for i in lstm_hidden_layers:
-            x = ConvLSTM3D(i,3,padding="same",activation="relu", return_sequences=True)(x, mask=mask)
-        x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
-        x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
+
+        x1 = ConvLSTM3D(x2.shape[-1],3,strides=(2,2,2), padding="same",activation="tanh", return_sequences=True)(x1, mask=mask)
+        x1 = ConvLSTM3D(x3.shape[-1],3,strides=(2,2,2), padding="same",activation="relu", return_sequences=False)(x1, mask=mask)
+        x1 = BatchNormalization()(x1)
+
+        x2 = ConvLSTM3D(x3.shape[-1],3,strides=(2,2,2), padding="same",activation="tanh", return_sequences=True)(x2, mask=mask)
+        x2 = ConvLSTM3D(x3.shape[-1],3,strides=(1,1,1), padding="same",activation="relu", return_sequences=False)(x2, mask=mask)
+        x2 = BatchNormalization()(x2)
+
+        x3 = ConvLSTM3D(x3.shape[-1],3,strides=(1,1,1), padding="same",activation="relu", return_sequences=False)(x3, mask=mask)
+        x3 = BatchNormalization()(x3)
+
+        x1, x2, x3 = [Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x_) for x_ in [x1, x2, x3]]
+
+        x = tf.keras.layers.Add()([x1,x2,x3])
+        x = BatchNormalization()(x)
+        # for i in lstm_hidden_layers:
+        #     x_ = ConvLSTM3D(i,3,padding="same",activation="relu", return_sequences=True)(x, mask=mask)
+        # x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
+        # x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
         x = self.decoder(x, training=False)
         model = Model(inputs=input, outputs=x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
