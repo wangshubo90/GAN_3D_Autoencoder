@@ -51,6 +51,8 @@ class AAETrainable(tune.Trainable):
         config["hidden_D"] = config["hidden"]
         #===============set up model================
         self.model = resAAE(**config)
+        self.model.gfactor=0.00000001
+        self.gfactor2 = config["g_loss_factor"]
         self.train_set=data["train"]
         self.val_set=data["val"]
         self.batch_size=batch_size
@@ -68,7 +70,7 @@ class AAETrainable(tune.Trainable):
             self.currentIsBest = False
 
         if self.iteration > 10000:
-            self.model.gfactor = 0.01
+            self.model.gfactor = self.gfactor2
         history = {k:v.numpy() for k, v in history.items()}
         return history
 
@@ -109,14 +111,14 @@ class MyCallback(Callback):
 
 asha_scheduler = AsyncHyperBandScheduler(
     time_attr='training_iteration',
-    max_t=25000,
+    max_t=30000,
     grace_period=25000,
     reduction_factor=3,
     brackets=1)
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAETF-noflatten-gf0.01-beta0.6",
+    name="resAAETF-noflatten-gf0.01-beta0.6-latest",
     metric="val_acc",
     mode="min",
     scheduler=asha_scheduler,
@@ -129,7 +131,7 @@ analysis = tune.run(
     },
     stop=stopper, 
     config = {
-        "g_loss_factor":0.00000001,
+        "g_loss_factor":grid_search([0.01, 0.001]),
         "hidden": grid_search([(8,8,16,16),(8,16,16,32),(8,16,32,64)]),
         "hidden_D":(8, 16, 16, 32),
         "optAE_lr" : 0.001, 
