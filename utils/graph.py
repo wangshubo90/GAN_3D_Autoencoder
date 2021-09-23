@@ -44,12 +44,14 @@ def seq_to_graph(seqformat=[1,1,0,0], tau_weighted=1, normalise=True):
         for j in range(seq_len):
             if seqformat[i]==1 and seqformat[j]==1:
                 adj[i,j] = adj[j,i] = np.exp(-np.abs(i-j)/tau_weighted) if tau_weighted else 1
-    
+            if i==j:
+                adj[i , j] = 1
     for i in range(seq_len):
         degree[i,i] = np.sum(adj[i])
     
     if normalise:
-        pass
+        d_half_norm= fractional_matrix_power(degree, -0.5)
+        return d_half_norm.dot(adj).dot(d_half_norm)
     else:
         return adj, degree
                 
