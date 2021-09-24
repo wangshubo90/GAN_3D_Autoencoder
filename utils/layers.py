@@ -169,6 +169,65 @@ def spatialLSTM3D(input, mask, lstm_activation='tanh'):
     x = bk.reshape(x, shape=(-1, *org_shape[2:]))
     return x
     
+class VASampling(tf.keras.layers.Layer):
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
+    def __init__(self, **kwargs):
+        super(VASampling, self).__init__(**kwargs)
+        self.n_batch = ""
+        self.n_dim = ""
+
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        batch = tf.shape(z_mean)[0]
+        dim = tf.shape(z_mean)[1]
+        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+    
+    def get_config(self):
+        # Implement get_config to enable serialization. This is optional.
+        base_config = super(VASampling, self).get_config()
+        config = {"initializer": keras.initializers.serialize(self.initializer)}
+        return dict(list(base_config.items()) + list(config.items()))
+
+class SimpleDense(tf.keras.layers.Layer):
+
+  def __init__(self, units=32):
+      super(SimpleDense, self).__init__()
+      self.units = units
+
+  def build(self, input_shape):
+      self.w = self.add_weight(shape=(input_shape[-1], self.units),
+                               initializer='random_normal',
+                               trainable=True)
+      self.b = self.add_weight(shape=(self.units,),
+                               initializer='random_normal',
+                               trainable=True)
+
+  def call(self, inputs):
+      return tf.matmul(inputs, self.w) + self.b
+
+class GCNLayer(tf.keras.layers.Layer):
+    def __init__(self, input_dim, output_dim, adj, dropout, sparse=False, feature_nnz=0, act=tf.nn.relu, name=None):
+        super(GCNLayer, self).__init__(name)
+        self.adj = adj
+        self.dropout = dropout
+        self.sparse = sparse
+        self.feature_nnz = feature_nnz
+        self.act = act
+        with tf.variable_scope(self.name):
+            self.weights = glorot([input_dim, output_dim], name='weight')
+            self.vars = [self.weights]
+
+    def build(self, input_shape):
+        self.w = 
+
+    def call(self, inputs):
+        x = inputs
+        x = sparse_dropout(x, 1 - self.dropout, self.feature_nnz) if self.sparse else tf.nn.dropout(x, 1 - self.dropout)
+        x = dot(x, self.weights, sparse=self.sparse)
+        x = dot(self.adj, x, sparse=True)
+        return self.act(x)
+
 
 if __name__=="__main__":
 
