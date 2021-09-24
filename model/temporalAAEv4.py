@@ -12,22 +12,24 @@ from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3
 from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
-from tensorflow.python.keras.layers.core import SpatialDropout2D
+from tensorflow.python.keras.layers.core import Dropout, SpatialDropout2D
 from tensorflow.python.ops.gen_batch_ops import Batch
 from utils.layers import *
 from utils.mask import compute_mask
 from model.resAAETF import resAAE
 import matplotlib.pyplot as plt
 
-class temporalAAEv3():
+class temporalAAEv4():
     #Adversarial Autoencoder
     def __init__(self, 
                 AAE_config="",
                 AAE_checkpoint="",
                 D_checkpoint=None,
+                batch_size=8,
                 lstm_layers=[32,32,32],
                 last_conv=True,
                 **kwargs):
+        self.batch_size = batch_size
         self.last_conv=last_conv
         self.lstm_layers=lstm_layers
         self.AAE = resAAE(**AAE_config)
@@ -50,27 +52,39 @@ class temporalAAEv3():
 
     def _buildTemporal(self, lstm_hidden_layers=[32,32], seq_length=4):
         
-        input = Input(shape=(seq_length, *self.AAE.img_shape), dtype=tf.float32)
-        input2 = Input(shape=(seq_length, seq_length), dtype=tf.float32)
-        mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
+        input = Input(shape=(seq_length, *self.AAE.img_shape), dtype=tf.float32, batch_size=self.batch_size)
+        input2 = Input(shape=(seq_length, seq_length), dtype=tf.float32, batch_size=self.batch_size)
+        adj = bk.reshape(input2, shape=(self.batch_size,1,1,1,seq_length*seq_length))
+        adj = tf.pad(adj, [[0,0], [1,1], [1,1], [1,1], [0,0]], mode="SYMMETRIC")
+        adj = tf.pad(adj, [[0,0], [0,0], [1,2], [1,2], [0,0]], mode="SYMMETRIC")
+        adj = bk.reshape(adj, shape=(self.batch_size,3,6,6,seq_length,seq_length))
+        # mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
         x1,x2,x3 = self.encoder(x, training=False)
         # x = SpatialDropout3D(0.3, data_format="channels_last")(x)
         x1, x2, x3 = [Lambda(lambda a: bk.reshape(a, (-1, seq_length, *a.shape[1:])))(x_) for x_ in [x1,x2,x3]]
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
-
-
-        x = self.decoder(x, training=False)
-        model = Model(inputs=input, outputs=x)
+        x3 = GCNfuncLayer(x3, adj, channel_out = x3.shape[-1]*2, seqToGraph=True, activation="relu")
+        # x3 = Dropout(0.2)(x3)
+        x3 = GCNfuncLayer(x3, adj, channel_out = self.encoder.output_shape[-1][-1], seqToGraph=False, activation="relu")
+        # x3 = GCNfuncLayer(input, input2, seqToGraph=False, activation="relu")
+        # x3 = Dropout(0.2)(x3)
+        x3 = tf.transpose(x3, perm = [0,1,2,3,5,4])
+        x3 = Dense(1, use_bias=True, activation="relu")(x3)
+        # x3 = Dropout(0.2)(x3)
+        x3 = tf.squeeze(x3, -1)
+        
+        x = self.decoder(x3, training=False)
+        model = Model(inputs=[input, input2], outputs=x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
         return model
 
     @tf.function
-    def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
+    def __train_step__(self, x, y,adj, val_x, val_y, val_adj,  gfactor, validate=True):
         input = x
         seqlength = x.shape[1]
         with tf.GradientTape() as ae_tape:
-            fake_image = self.temporalModel(x)
+            fake_image = self.temporalModel(inputs=(x, adj))
             fake_output = self.discriminator(fake_image, training=False)
 
             ae_loss = self.loss_function_AE(y, fake_image)
@@ -82,7 +96,7 @@ class temporalAAEv3():
         self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.temporalModel.trainable_variables))
         x = input
         with tf.GradientTape() as disc_tape:
-            fake_image = self.temporalModel(x, training=False)
+            fake_image = self.temporalModel(inputs=(x,adj), training=False)
             fake_output = self.discriminator(fake_image, training=True)
             real_output = self.discriminator(y, training=True)
 
@@ -93,7 +107,7 @@ class temporalAAEv3():
         self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
         
         if validate:
-            val_output = self.temporalModel(val_x, training = False)
+            val_output = self.temporalModel(inputs=(val_x,val_adj), training = False)
             val_loss = self.loss_function_AE(val_output, val_y)
             val_acc = self.acc_function(val_output, val_y)
             return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], [val_output, val_y]

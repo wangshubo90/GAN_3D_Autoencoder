@@ -36,7 +36,7 @@ def time_step_to_graph(seqformat=[1,1,0,0], tau=1, normalise=True):
     return adj_norm
 
 def seq_to_graph(seqformat=[1,1,0,0], tau_weighted=1, normalise=True):
-    seq_len = len(seqformat)
+    seq_len = seqformat.shape[0] if type(seqformat) == np.ndarray else len(seqformat) 
     adj = np.zeros(shape=(seq_len,seq_len))
     degree = np.zeros(shape=(seq_len,seq_len))
 
