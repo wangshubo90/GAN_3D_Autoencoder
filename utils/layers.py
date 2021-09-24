@@ -4,9 +4,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import backend as bk
-from tensorflow.keras.layers import Conv3DTranspose, Conv3D, BatchNormalization, Activation, Add, LSTM, Lambda, concatenate
+from tensorflow.keras.layers import Conv3DTranspose, Conv3D, BatchNormalization, Activation, Add, LSTM, Lambda, concatenate, Dense
 from tensorflow.keras.activations import relu
-from tensorflow.python.keras.layers.convolutional import Conv1DTranspose
 
 def __default_conv3D(input, filters=8, kernel_size=3, strides=(1,1,1), weight_decay = 1e-4, **kwargs):
     '''
@@ -207,19 +206,20 @@ class SimpleDense(tf.keras.layers.Layer):
       return tf.matmul(inputs, self.w) + self.b
 
 class GCNLayer(tf.keras.layers.Layer):
-    def __init__(self, input_dim, output_dim, adj, dropout, sparse=False, feature_nnz=0, act=tf.nn.relu, name=None):
+    def __init__(self, featureDimIn, featureDimOut, adjDim, dropout, feature_nnz=0, activation=tf.nn.relu, name="Graph_conv"):
         super(GCNLayer, self).__init__(name)
-        self.adj = adj
+        self.featureDimIn = featureDimIn
+        self.featureDimOut = featureDimOut
+        self.adjDim = adjDim
         self.dropout = dropout
-        self.sparse = sparse
-        self.feature_nnz = feature_nnz
-        self.act = act
+        self.act = activation
+        sefl.weightLayer = ""
         with tf.variable_scope(self.name):
             self.weights = glorot([input_dim, output_dim], name='weight')
             self.vars = [self.weights]
 
     def build(self, input_shape):
-        self.w = 
+        self.w = ""
 
     def call(self, inputs):
         x = inputs
@@ -228,6 +228,28 @@ class GCNLayer(tf.keras.layers.Layer):
         x = dot(self.adj, x, sparse=True)
         return self.act(x)
 
+def GCNfuncLayer(input, adj, channel_out, seqToGraph=True, use_bias=False, activation=None, **kwargs):
+    """
+    input_shape = [batch, seqence_len, ..., channel]
+    """
+    if seqToGraph:
+        rank = tf.rank(input)
+        axes = tf.range(rank)
+        permSeqToGraph = [axes[0],*axes[2:-1], axes[1], axes[-1]]
+        # permGraphToSeq = [axes[0],axes[-2], *axes[2:-1], axes[-1]]
+        x = tf.transpose(input, perm=permSeqToGraph)
+    else:
+        x = input
+    wx = Dense(channel_out, use_bias=use_bias, activation=None, **kwargs)(x)
+    # output = tf.tensordot(adj, wx, axes=[[2], [-2]])
+    output = tf.matmul(adj, wx)
+    if type(activation) == str:
+        act = tf.keras.activations.get(activation)
+    else:
+        act = activation
+    output = act(output)   
+
+    return output 
 
 if __name__=="__main__":
 
