@@ -10,6 +10,9 @@ from tensorflow.keras.layers import Input, Reshape, Flatten, Dropout, SpatialDro
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Model
 from utils.group_norm import GroupNormalization
+import tensorflow as tf
+import numpy as np
+import os
 
 def green_block(inp, filters, data_format='channels_last', name=None):
     """
@@ -52,7 +55,7 @@ def green_block(inp, filters, data_format='channels_last', name=None):
     # No. of groups = 8, as given in the paper
     x = GroupNormalization(
         groups=8,
-        axis=1 if data_format == 'channels_last' else 0,
+        axis=-1 if data_format == 'channels_last' else 1,
         name=f'GroupNorm_1_{name}' if name else None)(inp)
     x = Activation('relu', name=f'Relu_1_{name}' if name else None)(x)
     x = Conv3D(
@@ -65,7 +68,7 @@ def green_block(inp, filters, data_format='channels_last', name=None):
 
     x = GroupNormalization(
         groups=8,
-        axis=1 if data_format == 'channels_last' else 0,
+        axis=-1 if data_format == 'channels_last' else 1,
         name=f'GroupNorm_2_{name}' if name else None)(x)
     x = Activation('relu', name=f'Relu_2_{name}' if name else None)(x)
     x = Conv3D(
@@ -134,7 +137,7 @@ def loss_gt(e=1e-8):
     
     return loss_gt_
 
-def loss_VAE(input_shape, z_mean, z_var, weight_L2=0.1, weight_KL=0.1):
+def loss_VAE(input_shape, weight_L2=0.1, weight_KL=0.1):
     """
     loss_VAE(input_shape, z_mean, z_var, weight_L2=0.1, weight_KL=0.1)
     ------------------------------------------------------
@@ -171,7 +174,7 @@ def loss_VAE(input_shape, z_mean, z_var, weight_L2=0.1, weight_KL=0.1):
         to calculate the L2 and KL loss.
         
     """
-    def loss_VAE_(y_true, y_pred):
+    def loss_VAE_(y_true, y_pred, z_mean, z_var,):
         c, H, W, D = input_shape
         n = c * H * W * D
         
@@ -218,7 +221,7 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     assert len(input_shape) == 4, "Input shape must be a 4-tuple"
     assert (c % 4) == 0, "The no. of channels must be divisible by 4"
     assert (H % 16) == 0 and (W % 16) == 0 and (D % 16) == 0, \
-        "All the input dimensions must be divisible by 16"
+        "All the input dimensions must be divisible by 16. ({}, {}, {}) is not a valid shape".format(D,H,W)
 
 
     # -------------------------------------------------------------------------
@@ -326,7 +329,6 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
         name='Dec_GT_UpSample_32')(x)
     x = Add(name='Input_Dec_GT_32')([x, x1])
     x = green_block(x, 32, name='Dec_GT_32')
-    print(x.shape)
     ### Blue Block x1 (output filters=32)
     x = Conv3D(
         filters=32,
@@ -344,12 +346,13 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
         data_format='channels_last',
         activation='sigmoid',
         name='Dec_GT_Output')(x)
+    print(x.shape)
 
     ## VAE (Variational Auto Encoder) Part
     # -------------------------------------------------------------------------
 
     ### VD Block (Reducing dimensionality of the data)
-    x = GroupNormalization(groups=8, axis=1, name='Dec_VAE_VD_GN')(x4)
+    x = GroupNormalization(groups=8, axis=-1, name='Dec_VAE_VD_GN')(x4)
     x = Activation('relu', name='Dec_VAE_VD_relu')(x)
     x = Conv3D(
         filters=16,
@@ -371,7 +374,8 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     ### VU Block (Upsizing back to a depth of 256)
     x = Dense((c//4) * (H//16) * (W//16) * (D//16))(x)
     x = Activation('relu')(x)
-    x = Reshape(((H//16), (W//16), (D//16), (c//4)))(x)
+    x = Reshape(((D//16), (H//16), (W//16), (c//4)))(x)
+    print(x.shape)
     x = Conv3D(
         filters=256,
         kernel_size=(1, 1, 1),
@@ -394,7 +398,6 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
         size=2,
         data_format='channels_last',
         name='Dec_VAE_UpSample_128')(x)
-    print(x.shape)
     x = green_block(x, 128, name='Dec_VAE_128')
 
     ### Green Block x1 (output filters=64)
@@ -431,6 +434,7 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
         padding='same',
         data_format='channels_last',
         name='Input_Dec_VAE_Output')(x)
+    print(x.shape)
 
     ### Output Block
     out_VAE = Conv3D(
@@ -442,7 +446,7 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
 
     # Build and Compile the model
     out = out_GT
-    model = Model(inp, outputs=[out, out_VAE])  # Create the model
+    model = Model(inp, outputs=[out, out_VAE, z_mean, z_var])  # Create the model
     if compile:
         model.compile(
             Adam(learning_rate=1e-4),
@@ -456,31 +460,130 @@ class VAE3Dseg:
     def __init__(self, 
             input_shape, 
             output_channels, 
-            vae_dim,  
             weight_L2=0.1, 
             weight_KL=0.1, 
-            dice_e=1e-8):
+            dice_e=1e-8,
+            optimizer=Adam(0.01)):
         self.input_shape = input_shape
         self.output_channels = output_channels
-        self.vae_dim = vae_dim
+        self.vae_loss_func = loss_VAE(input_shape, weight_L2=weight_L2, weight_KL=weight_KL)
         self.seg_loss_func = loss_gt(e=dice_e)
-        self.vae_loss_func = loss_VAE(weight_L2=weight_L2, weight_KL=weight_KL)
+        self.optimizer = optimizer
         self.model = build_model(
-            input_shape=(4, 160, 192, 128), 
-            output_channels=3, 
-            weight_L2=0.1, 
-            weight_KL=0.1, 
-            dice_e=1e-8, 
+            input_shape=input_shape, 
+            output_channels=output_channels, 
+            weight_L2=weight_L2, 
+            weight_KL=weight_KL, 
+            dice_e=dice_e, 
             compile=False
         )
     def fetch_batch(self, trainset, valset):
-        pass
-    def __train_step__(self, x, x_seg, val_x, val_seg_x, validate=True):
-        pass
-    def train_step(self, ):
-        pass
-    def train(self, ):
-        pass
+        val_x = train_x = np.zeros(shape=(4,16,128,128,4), dtype=np.float32)
+        val_seg = train_seg = np.zeros(shape = (4,16,128,128,5), dtype=np.float32)
+        return train_x, train_seg, val_x, val_seg
+    
+    @tf.function
+    def __train_step__(self, train_x, train_seg, val_x, val_seg, validate=True):
+        with tf.GradientTape() as vae_tape, tf.GradientTape() as seg_tape:
+            seg, x_pred, z_mean, z_var = self.model(train_x)
+            vae_loss = self.vae_loss_func(train_x, x_pred, z_mean, z_var)
+            seg_loss = self.seg_loss_func(train_seg, seg)
+        
+        gradients_vae = vae_tape.gradient(vae_loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients_vae, self.model.trainable_variables))
+        gradients_seg = seg_tape.gradient(seg_loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients_seg, self.model.trainable_variables))
+
+        if validate:
+            val_seg_pred, val_x_pred, val_z_mean, val_z_var = self.model(val_x)
+            val_vae_loss = self.vae_loss_func(val_x, val_x_pred, val_z_mean, val_z_var)
+            val_seg_loss = self.seg_loss_func(val_seg, val_seg_pred)
+            return [seg_loss, vae_loss, val_seg_loss, val_vae_loss], [val_x, val_seg, val_x_pred, val_seg_pred]
+        else:
+            return [seg_loss, vae_loss]
+
+    def train_step(self, train_set, val_set, batch_size=None, validate=True):
+        train_x, train_seg, val_x, val_seg= self.fetch_batch(train_set, val_set)
+        if validate:
+            [seg_loss, vae_loss, val_seg_loss, val_vae_loss], val_output = self.__train_step__(train_x, train_seg, val_x, val_seg, validate=validate)
+            history = {
+                "seg_loss":seg_loss,
+                "vae_loss":vae_loss,
+                "val_seg_loss": val_seg_loss,
+                "val_vae_loss": val_vae_loss
+            }
+            return history, val_output
+        else:
+            seg_loss, vae_loss = self.__train_step__(train_x, train_seg, val_x, val_seg, validate=validate)
+            history = {
+                "seg_loss":seg_loss,
+                "vae_loss":vae_loss,
+            }
+            return history
+    def train(self, train_set, val_set, n_epochs, batch_size=None, logdir=r"data/Gan_training/log", logstart=500, logimage=8, logslices=slice(None)):
+        for epoch in range(1,n_epochs):
+            history, val_output = self.train_step(train_set, val_set, batch_size=batch_size, validate=True)
+            if epoch == 1:
+                loss_min = history["val_seg_loss"]
+                loss_min_epoch = 1
+                summary = {k:[] for k in history.keys()}
+            
+            if history["seg_loss"] < loss_min:
+                loss_min = history["val_seg_loss"]
+                loss_min_epoch = epoch
+                if epoch > logstart:
+                    self.model.save(os.path.join(logdir, "model_epoch_{}.h5".format(epoch)))
+                    if logimage:
+                        self.save_image(val_output, epoch, logdir, logimage, logslices=logslices)
+
+            print("Epoch -- {} -- CurrentBest -- {} -- val_seg_loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
+
+    def save_image(self, output, epoch, logdir=".", logimage=8, logslices=slice(None)):
+        D,H,W,C = self.input_shape
+        seg_c = self.output_channels
+
+        def getArray(i):
+            if isinstance(i, tf.Tensor):
+                return np.squeeze(i.numpy())
+            elif isinstance(i, np.ndarray):
+                return np.squeeze(i)
+            else:
+                raise ValueError("Ether a tf.Tensor or np.ndarray is expected")
+
+        # def concatChannel(image):
+        #     '''
+        #     image shape = (y, x, channel)
+        #     '''
+        #     return np.concat([image[:,:,i] for i in image.shape[-1]], axis = )
+
+        val_x, val_seg, val_x_pred, val_seg_pred = [getArray(i)[logslices] for i in output]
+        val_x.dump(os.path.join(logdir, "val-x-{}.png".format(epoch)))
+        val_seg.dump(os.path.join(logdir, "val-seg-{}.png".format(epoch)))
+        val_x_pred.dump(os.path.join(logdir, "val-x-pred-{}.png".format(epoch)))
+        val_seg_pred.dump(os.path.join(logdir, "val-seg-pred-{}.png".format(epoch)))
+
+
+        # image = np.squeeze(output[0].numpy())[:logimage]
+        # valimage = np.squeeze(output[1])[:logimage]
+
+        # if logslices:
+        #     image = image[logslices]
+        #     valimage = valimage[logslices]
+        #     shape = image.shape
+        # else:
+        #     shape = image.shape
+        #     image = image[:, shape[1]//2, ...]
+        #     valimage = valimage[:, shape[1]//2, ...]
+
+        # image = np.concatenate([image.reshape((-1, shape[-1])), valimage.reshape((-1, shape[-1]))], axis=1) * 255
+
+        # # fig = plt.figure()
+        # # plt.imshow(image, cmap="gray")
+        # # plt.axis("off")
+        # # plt.savefig(os.path.join(logdir, "val-image-{}.png".format(epoch)), dpi=300)
+        # # plt.close()
+        # imsave(os.path.join(logdir, "val-image-{}.png".format(epoch)), image.astype(np.uint8), check_contrast=False)
+
     def save_output(self, checkpount):
         pass
     def save_model(self, ):
