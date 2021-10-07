@@ -97,9 +97,9 @@ def sampling(args):
 
 
 def dice_coefficient(y_true, y_pred):
-    intersection = K.sum(K.abs(y_true * y_pred), axis=[-3,-2,-1])
-    dn = K.sum(K.square(y_true) + K.square(y_pred), axis=[-3,-2,-1]) + 1e-8
-    return K.mean(2 * intersection / dn, axis=[0,1])
+    intersection = K.sum(K.abs(y_true * y_pred), axis=[1,2,3])
+    dn = K.sum(K.square(y_true) + K.square(y_pred), axis=[1,2,3]) + 1e-8
+    return K.mean(2 * intersection / dn, axis=[0, -1])
 
 
 def loss_gt(e=1e-8):
@@ -127,10 +127,10 @@ def loss_gt(e=1e-8):
         
     """
     def loss_gt_(y_true, y_pred):
-        intersection = K.sum(K.abs(y_true * y_pred), axis=[-3,-2,-1])
-        dn = K.sum(K.square(y_true) + K.square(y_pred), axis=[-3,-2,-1]) + e
+        intersection = K.sum(K.abs(y_true * y_pred), axis=[1,2,3])
+        dn = K.sum(K.square(y_true) + K.square(y_pred), axis=[1,2,3]) + e
         
-        return - K.mean(2 * intersection / dn, axis=[0,1])
+        return - K.mean(2 * intersection / dn, axis=[0,-1])
     
     return loss_gt_
 
@@ -186,7 +186,7 @@ def loss_VAE(input_shape, z_mean, z_var, weight_L2=0.1, weight_KL=0.1):
 
     return loss_VAE_
 
-def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1, weight_KL=0.1, dice_e=1e-8):
+def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1, weight_KL=0.1, dice_e=1e-8, compile=False):
     """
     build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1, weight_KL=0.1)
     -------------------------------------------
@@ -443,10 +443,47 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     # Build and Compile the model
     out = out_GT
     model = Model(inp, outputs=[out, out_VAE])  # Create the model
-    model.compile(
-        Adam(learning_rate=1e-4),
-        [loss_gt(dice_e), loss_VAE(input_shape, z_mean, z_var, weight_L2=weight_L2, weight_KL=weight_KL)],
-        metrics=[dice_coefficient]
-    )
+    if compile:
+        model.compile(
+            Adam(learning_rate=1e-4),
+            [loss_gt(dice_e), loss_VAE(input_shape, z_mean, z_var, weight_L2=weight_L2, weight_KL=weight_KL)],
+            metrics=[dice_coefficient]
+        )
 
     return model
+
+class VAE3Dseg:
+    def __init__(self, 
+            input_shape, 
+            output_channels, 
+            vae_dim,  
+            weight_L2=0.1, 
+            weight_KL=0.1, 
+            dice_e=1e-8):
+        self.input_shape = input_shape
+        self.output_channels = output_channels
+        self.vae_dim = vae_dim
+        self.seg_loss_func = loss_gt(e=dice_e)
+        self.vae_loss_func = loss_VAE(weight_L2=weight_L2, weight_KL=weight_KL)
+        self.model = build_model(
+            input_shape=(4, 160, 192, 128), 
+            output_channels=3, 
+            weight_L2=0.1, 
+            weight_KL=0.1, 
+            dice_e=1e-8, 
+            compile=False
+        )
+    def fetch_batch(self, trainset, valset):
+        pass
+    def __train_step__(self, x, x_seg, val_x, val_seg_x, validate=True):
+        pass
+    def train_step(self, ):
+        pass
+    def train(self, ):
+        pass
+    def save_output(self, checkpount):
+        pass
+    def save_model(self, ):
+        pass
+    def load_model(self, ):
+        pass
