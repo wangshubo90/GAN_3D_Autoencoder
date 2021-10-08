@@ -133,7 +133,7 @@ def loss_gt(e=1e-8):
         intersection = K.sum(K.abs(y_true * y_pred), axis=[1,2,3])
         dn = K.sum(K.square(y_true) + K.square(y_pred), axis=[1,2,3]) + e
         
-        return - K.mean(2 * intersection / dn, axis=[0,-1])
+        return 1- K.mean(2 * intersection / dn, axis=[0,-1])
     
     return loss_gt_
 
@@ -346,7 +346,6 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
         data_format='channels_last',
         activation='sigmoid',
         name='Dec_GT_Output')(x)
-    print(x.shape)
 
     ## VAE (Variational Auto Encoder) Part
     # -------------------------------------------------------------------------
@@ -375,7 +374,6 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     x = Dense((c//4) * (H//16) * (W//16) * (D//16))(x)
     x = Activation('relu')(x)
     x = Reshape(((D//16), (H//16), (W//16), (c//4)))(x)
-    print(x.shape)
     x = Conv3D(
         filters=256,
         kernel_size=(1, 1, 1),
@@ -434,7 +432,6 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
         padding='same',
         data_format='channels_last',
         name='Input_Dec_VAE_Output')(x)
-    print(x.shape)
 
     ### Output Block
     out_VAE = Conv3D(
@@ -463,12 +460,13 @@ class VAE3Dseg:
             weight_L2=0.1, 
             weight_KL=0.1, 
             dice_e=1e-8,
-            optimizer=Adam(0.01)):
+            lr=0.0001):
         self.input_shape = input_shape
         self.output_channels = output_channels
         self.vae_loss_func = loss_VAE(input_shape, weight_L2=weight_L2, weight_KL=weight_KL)
         self.seg_loss_func = loss_gt(e=dice_e)
-        self.optimizer = optimizer
+        self.optimizer1 = Adam(lr)
+        self.optimizer2 = Adam(lr)
         self.model = build_model(
             input_shape=input_shape, 
             output_channels=output_channels, 
@@ -478,9 +476,12 @@ class VAE3Dseg:
             compile=False
         )
     def fetch_batch(self, trainset, valset):
-        val_x = train_x = np.zeros(shape=(4,16,128,128,4), dtype=np.float32)
-        val_seg = train_seg = np.zeros(shape = (4,16,128,128,5), dtype=np.float32)
-        return train_x, train_seg, val_x, val_seg
+        for trainbatch, valbatch in zip(trainset, valset):
+            train_x = trainbatch[0]
+            train_seg = trainbatch[1]
+            val_x = valbatch[0]
+            val_seg = valbatch[1]
+            yield train_x, train_seg, val_x, val_seg
     
     @tf.function
     def __train_step__(self, train_x, train_seg, val_x, val_seg, validate=True):
@@ -490,9 +491,9 @@ class VAE3Dseg:
             seg_loss = self.seg_loss_func(train_seg, seg)
         
         gradients_vae = vae_tape.gradient(vae_loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients_vae, self.model.trainable_variables))
+        self.optimizer1.apply_gradients(zip(gradients_vae, self.model.trainable_variables))
         gradients_seg = seg_tape.gradient(seg_loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients_seg, self.model.trainable_variables))
+        self.optimizer1.apply_gradients(zip(gradients_seg, self.model.trainable_variables))
 
         if validate:
             val_seg_pred, val_x_pred, val_z_mean, val_z_var = self.model(val_x)
@@ -502,8 +503,8 @@ class VAE3Dseg:
         else:
             return [seg_loss, vae_loss]
 
-    def train_step(self, train_set, val_set, batch_size=None, validate=True):
-        train_x, train_seg, val_x, val_seg= self.fetch_batch(train_set, val_set)
+    def train_step(self, datapipeline, batch_size=None, validate=True):
+        train_x, train_seg, val_x, val_seg= next(datapipeline)
         if validate:
             [seg_loss, vae_loss, val_seg_loss, val_vae_loss], val_output = self.__train_step__(train_x, train_seg, val_x, val_seg, validate=validate)
             history = {
@@ -521,12 +522,22 @@ class VAE3Dseg:
             }
             return history
     def train(self, train_set, val_set, n_epochs, batch_size=None, logdir=r"data/Gan_training/log", logstart=500, logimage=8, logslices=slice(None)):
+        summary_writer = tf.summary.create_file_writer(logdir)
+        summary_writer.set_as_default()
+        datapipeline=self.fetch_batch(train_set, val_set)
         for epoch in range(1,n_epochs):
-            history, val_output = self.train_step(train_set, val_set, batch_size=batch_size, validate=True)
+            history, val_output = self.train_step(datapipeline, batch_size=batch_size, validate=True)
+            with summary_writer.as_default():
+                for k in history.keys():
+                    history[k] = np.squeeze(history[k].numpy())
+                    tf.summary.scalar(k, data=history[k], step=epoch)
             if epoch == 1:
                 loss_min = history["val_seg_loss"]
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
+            else:
+                for key in summary.keys():
+                    summary[key].append(history[key])
             
             if history["seg_loss"] < loss_min:
                 loss_min = history["val_seg_loss"]
@@ -537,6 +548,8 @@ class VAE3Dseg:
                         self.save_image(val_output, epoch, logdir, logimage, logslices=logslices)
 
             print("Epoch -- {} -- CurrentBest -- {} -- val_seg_loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
+            print("   ".join(["{}: {:.4f}".format(k, v) for k, v in history.items()]))
+        return summary
 
     def save_image(self, output, epoch, logdir=".", logimage=8, logslices=slice(None)):
         D,H,W,C = self.input_shape
