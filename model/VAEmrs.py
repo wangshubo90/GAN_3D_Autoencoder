@@ -185,9 +185,9 @@ def loss_VAE(input_shape, weight_L2=0.1, weight_KL=0.1):
             axis=-1
         )
 
-        return weight_L2 * loss_L2 + weight_KL * loss_KL
+        return K.mean(weight_L2 * loss_L2 + weight_KL * loss_KL)
 
-    return K.mean(loss_VAE_)
+    return loss_VAE_
 
 def build_model(input_shape=(60, 60, 15, 6), output_channels=6):
     """
@@ -277,8 +277,8 @@ def build_model(input_shape=(60, 60, 15, 6), output_channels=6):
 
     ## Green Blocks x4 (output filters = 256)
     x = green_block(x, 64, name='Enc_256_1')
-    x4 = green_block(x, 64, name='Enc_256_2')
-    x = green_block(x4, 64, name='Enc_256_3')
+    x4 = green_block(x, 128, name='Enc_256_2')
+    x = green_block(x4, 128, name='Enc_256_3')
     x = green_block(x, 64, name='x4')
     ### Output Block
     out_GT = Conv3D(
@@ -468,21 +468,24 @@ class VAEmrs:
             output_channels, 
             weight_L2=0.1, 
             weight_KL=0.1, 
-            dice_e=1e-8,
-            optimizer=Adam(0.01)):
+            lr1=0.0001, 
+            lr2=0.0001):
         self.input_shape = input_shape
         self.output_channels = output_channels
         self.vae_loss_func = loss_VAE(input_shape, weight_L2=weight_L2, weight_KL=weight_KL)
         self.mrs_loss_func = MeanSquaredError()
-        self.optimizer = optimizer
+        self.optimizer1 = Adam(lr1)
+        self.optimizer2 = Adam(lr2)
         self.model = build_model(
             input_shape=input_shape, 
             output_channels=output_channels
         )
     def fetch_batch(self, trainset, valset):
-        val_x = train_x = np.zeros(shape=(4,60,60,15,6), dtype=np.float32)
-        val_mrs = train_mrs = np.zeros(shape = (4,6,6,1,6), dtype=np.float32)
-        while True:
+        for trainbatch, valbatch in zip(trainset, valset):
+            train_x = trainbatch[0]
+            train_mrs = trainbatch[1]
+            val_x = valbatch[0]
+            val_mrs = valbatch[1]
             yield train_x, train_mrs, val_x, val_mrs
     
     @tf.function
@@ -490,12 +493,12 @@ class VAEmrs:
         with tf.GradientTape() as vae_tape, tf.GradientTape() as mrs_tape:
             mrs, x_pred, z_mean, z_var = self.model(train_x)
             vae_loss = self.vae_loss_func(train_x, x_pred, z_mean, z_var)
-            mrs_loss = self.mrs_loss_func(train_mrs, mrs)
+            mrs_loss = self.mrs_loss_func(train_mrs, mrs) *0.01
         
         gradients_vae = vae_tape.gradient(vae_loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients_vae, self.model.trainable_variables))
+        self.optimizer1.apply_gradients(zip(gradients_vae, self.model.trainable_variables))
         gradients_mrs = mrs_tape.gradient(mrs_loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients_mrs, self.model.trainable_variables))
+        self.optimizer2.apply_gradients(zip(gradients_mrs, self.model.trainable_variables))
 
         if validate:
             val_mrs_pred, val_x_pred, val_z_mean, val_z_var = self.model(val_x)
@@ -534,7 +537,7 @@ class VAEmrs:
                     history[k] = np.squeeze(history[k].numpy())
                     tf.summary.scalar(k, data=history[k], step=epoch)
             if epoch == 1:
-                loss_min = history["val_seg_loss"]
+                loss_min = history["val_mrs_loss"]
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
             else:
