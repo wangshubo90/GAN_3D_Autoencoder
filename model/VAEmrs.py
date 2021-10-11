@@ -4,8 +4,8 @@
 # Author of this code: Suyog Jadhav (https://github.com/IAmSUyogJadhav)
 
 import tensorflow.keras.backend as K
-from tensorflow.keras.losses import mse
-from tensorflow.keras.layers import Conv3D, Activation, Add, UpSampling3D, Lambda, Dense
+from tensorflow.keras.losses import MeanSquaredError
+from tensorflow.keras.layers import Conv3D, Activation, Add, UpSampling3D, Lambda, Dense, Conv3DTranspose
 from tensorflow.keras.layers import Input, Reshape, Flatten, Dropout, SpatialDropout3D
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Model
@@ -133,7 +133,7 @@ def loss_gt(e=1e-8):
         intersection = K.sum(K.abs(y_true * y_pred), axis=[1,2,3])
         dn = K.sum(K.square(y_true) + K.square(y_pred), axis=[1,2,3]) + e
         
-        return 1- K.mean(2 * intersection / dn, axis=[0,-1])
+        return - K.mean(2 * intersection / dn, axis=[0,-1])
     
     return loss_gt_
 
@@ -185,11 +185,11 @@ def loss_VAE(input_shape, weight_L2=0.1, weight_KL=0.1):
             axis=-1
         )
 
-        return weight_L2 * loss_L2 + weight_KL * loss_KL
+        return K.mean(weight_L2 * loss_L2 + weight_KL * loss_KL)
 
     return loss_VAE_
 
-def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1, weight_KL=0.1, dice_e=1e-8, compile=False):
+def build_model(input_shape=(60, 60, 15, 6), output_channels=6):
     """
     build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1, weight_KL=0.1)
     -------------------------------------------
@@ -219,9 +219,9 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     """
     D, H, W, c = input_shape
     assert len(input_shape) == 4, "Input shape must be a 4-tuple"
-    assert (c % 4) == 0, "The no. of channels must be divisible by 4"
-    assert (H % 16) == 0 and (W % 16) == 0 and (D % 16) == 0, \
-        "All the input dimensions must be divisible by 16. ({}, {}, {}) is not a valid shape".format(D,H,W)
+    assert (c // 4) > 0, "The no. of channels must be more than 4"
+    # assert (H % 16) == 0 and (W % 16) == 0 and (D % 16) == 0, \
+    #     "All the input dimensions must be divisible by 16. ({}, {}, {}) is not a valid shape".format(D,H,W)
 
 
     # -------------------------------------------------------------------------
@@ -233,7 +233,7 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
 
     ## The Initial Block
     x = Conv3D(
-        filters=32,
+        filters=8,
         kernel_size=(3, 3, 3),
         strides=1,
         padding='same',
@@ -246,41 +246,49 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     ## Green Block x1 (output filters = 32)
     x1 = green_block(x, 32, name='x1')
     x = Conv3D(
-        filters=32,
+        filters=8,
         kernel_size=(3, 3, 3),
         strides=2,
-        padding='same',
+        padding='valid',
         data_format='channels_last',
         name='Enc_DownSample_32')(x1)
 
     ## Green Block x2 (output filters = 64)
-    x = green_block(x, 64, name='Enc_64_1')
-    x2 = green_block(x, 64, name='x2')
+    x = green_block(x, 16, name='Enc_64_1')
+    x2 = green_block(x, 16, name='x2')
     x = Conv3D(
-        filters=64,
+        filters=16,
         kernel_size=(3, 3, 3),
         strides=2,
-        padding='same',
+        padding='valid',
         data_format='channels_last',
         name='Enc_DownSample_64')(x2)
 
     ## Green Blocks x2 (output filters = 128)
-    x = green_block(x, 128, name='Enc_128_1')
-    x3 = green_block(x, 128, name='x3')
+    x = green_block(x, 32, name='Enc_128_1')
+    x3 = green_block(x, 32, name='x3')
     x = Conv3D(
-        filters=128,
+        filters=32,
         kernel_size=(3, 3, 3),
         strides=2,
-        padding='same',
+        padding='valid',
         data_format='channels_last',
         name='Enc_DownSample_128')(x3)
 
     ## Green Blocks x4 (output filters = 256)
-    x = green_block(x, 256, name='Enc_256_1')
-    x = green_block(x, 256, name='Enc_256_2')
-    x = green_block(x, 256, name='Enc_256_3')
-    x4 = green_block(x, 256, name='x4')
-    
+    x = green_block(x, 64, name='Enc_256_1')
+    x4 = green_block(x, 128, name='Enc_256_2')
+    x = green_block(x4, 128, name='Enc_256_3')
+    x = green_block(x, 64, name='x4')
+    ### Output Block
+    out_GT = Conv3D(
+        filters=output_channels,  # No. of tumor classes is 3
+        kernel_size=(1, 1, 1),
+        strides=1,
+        data_format='channels_last',
+        activation='relu',
+        name='Dec_GT_Output')(x)
+    '''
     # -------------------------------------------------------------------------
     # Decoder
     # -------------------------------------------------------------------------
@@ -346,7 +354,7 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
         data_format='channels_last',
         activation='sigmoid',
         name='Dec_GT_Output')(x)
-
+    '''
     ## VAE (Variational Auto Encoder) Part
     # -------------------------------------------------------------------------
 
@@ -371,62 +379,69 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     x = Lambda(sampling, name='Dec_VAE_VDraw_Sampling')([z_mean, z_var])
     
     ### VU Block (Upsizing back to a depth of 256)
-    x = Dense((c//4) * (H//16) * (W//16) * (D//16))(x)
+    x = Dense(7*7*8)(x)
     x = Activation('relu')(x)
-    x = Reshape(((D//16), (H//16), (W//16), (c//4)))(x)
-    x = Conv3D(
-        filters=256,
-        kernel_size=(1, 1, 1),
-        strides=1,
-        data_format='channels_last',
-        name='Dec_VAE_ReduceDepth_256')(x)
-    x = UpSampling3D(
-        size=2,
-        data_format='channels_last',
-        name='Dec_VAE_UpSample_256')(x)
-
-    ### Green Block x1 (output filters=128)
-    x = Conv3D(
-        filters=128,
-        kernel_size=(1, 1, 1),
-        strides=1,
-        data_format='channels_last',
-        name='Dec_VAE_ReduceDepth_128')(x)
-    x = UpSampling3D(
-        size=2,
-        data_format='channels_last',
-        name='Dec_VAE_UpSample_128')(x)
-    x = green_block(x, 128, name='Dec_VAE_128')
-
-    ### Green Block x1 (output filters=64)
+    x = Reshape((7,7,1,8))(x)
     x = Conv3D(
         filters=64,
         kernel_size=(1, 1, 1),
         strides=1,
         data_format='channels_last',
-        name='Dec_VAE_ReduceDepth_64')(x)
-    x = UpSampling3D(
-        size=2,
-        data_format='channels_last',
-        name='Dec_VAE_UpSample_64')(x)
-    x = green_block(x, 64, name='Dec_VAE_64')
+        name='Dec_VAE_ReduceDepth_256')(x)
 
-    ### Green Block x1 (output filters=32)
+    x = Conv3DTranspose(
+        filters=64,
+        kernel_size=(3,3,3),
+        strides=(2,2,2),
+        data_format="channels_last",
+        name='Dec_VAE_Conv3Dtranpose64')(x)
+
+    ### Green Block x1 (output filters=128)
     x = Conv3D(
         filters=32,
         kernel_size=(1, 1, 1),
         strides=1,
         data_format='channels_last',
         name='Dec_VAE_ReduceDepth_32')(x)
-    x = UpSampling3D(
-        size=2,
+    x = Conv3DTranspose(
+        filters=32,
+        kernel_size=(2,2,3),
+        strides=(2,2,2),
+        data_format="channels_last",
+        name='Dec_VAE_Conv3Dtranpose32')(x)
+    x = green_block(x, 32, name='Dec_VAE_128')
+
+    ### Green Block x1 (output filters=64)
+    x = Conv3D(
+        filters=16,
+        kernel_size=(1, 1, 1),
+        strides=1,
         data_format='channels_last',
-        name='Dec_VAE_UpSample_32')(x)
-    x = green_block(x, 32, name='Dec_VAE_32')
+        name='Dec_VAE_ReduceDepth_64')(x)
+    x = Conv3DTranspose(
+        filters=16,
+        kernel_size=(2,2,3),
+        strides=(2,2,2),
+        data_format="channels_last",
+        name='Dec_VAE_Conv3Dtranpose16')(x)
+    x = green_block(x, 16, name='Dec_VAE_64')
+
+    ### Green Block x1 (output filters=32)
+    # x = Conv3D(
+    #     filters=8,
+    #     kernel_size=(1, 1, 1),
+    #     strides=1,
+    #     data_format='channels_last',
+    #     name='Dec_VAE_ReduceDepth_8')(x)
+    # x = UpSampling3D(
+    #     size=2,
+    #     data_format='channels_last',
+    #     name='Dec_VAE_UpSample_8')(x)
+    # x = green_block(x, 8, name='Dec_VAE_32')
 
     ### Blue Block x1 (output filters=32)
     x = Conv3D(
-        filters=32,
+        filters=8,
         kernel_size=(3, 3, 3),
         strides=1,
         padding='same',
@@ -435,7 +450,7 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
 
     ### Output Block
     out_VAE = Conv3D(
-        filters=4,
+        filters=c,
         kernel_size=(1, 1, 1),
         strides=1,
         data_format='channels_last',
@@ -444,80 +459,70 @@ def build_model(input_shape=(4, 160, 192, 128), output_channels=3, weight_L2=0.1
     # Build and Compile the model
     out = out_GT
     model = Model(inp, outputs=[out, out_VAE, z_mean, z_var])  # Create the model
-    if compile:
-        model.compile(
-            Adam(learning_rate=1e-4),
-            [loss_gt(dice_e), loss_VAE(input_shape, z_mean, z_var, weight_L2=weight_L2, weight_KL=weight_KL)],
-            metrics=[dice_coefficient]
-        )
 
     return model
 
-class VAE3Dseg:
+class VAEmrs:
     def __init__(self, 
             input_shape, 
             output_channels, 
             weight_L2=0.1, 
             weight_KL=0.1, 
-            dice_e=1e-8,
-            lr=0.0001):
+            lr1=0.0001, 
+            lr2=0.0001):
         self.input_shape = input_shape
         self.output_channels = output_channels
         self.vae_loss_func = loss_VAE(input_shape, weight_L2=weight_L2, weight_KL=weight_KL)
-        self.seg_loss_func = loss_gt(e=dice_e)
-        self.optimizer1 = Adam(lr)
-        self.optimizer2 = Adam(lr)
+        self.mrs_loss_func = MeanSquaredError()
+        self.optimizer1 = Adam(lr1)
+        self.optimizer2 = Adam(lr2)
         self.model = build_model(
             input_shape=input_shape, 
-            output_channels=output_channels, 
-            weight_L2=weight_L2, 
-            weight_KL=weight_KL, 
-            dice_e=dice_e, 
-            compile=False
+            output_channels=output_channels
         )
     def fetch_batch(self, trainset, valset):
         for trainbatch, valbatch in zip(trainset, valset):
             train_x = trainbatch[0]
-            train_seg = trainbatch[1]
+            train_mrs = trainbatch[1]
             val_x = valbatch[0]
-            val_seg = valbatch[1]
-            yield train_x, train_seg, val_x, val_seg
+            val_mrs = valbatch[1]
+            yield train_x, train_mrs, val_x, val_mrs
     
     @tf.function
-    def __train_step__(self, train_x, train_seg, val_x, val_seg, validate=True):
-        with tf.GradientTape() as vae_tape, tf.GradientTape() as seg_tape:
-            seg, x_pred, z_mean, z_var = self.model(train_x)
+    def __train_step__(self, train_x, train_mrs, val_x, val_mrs, validate=True):
+        with tf.GradientTape() as vae_tape, tf.GradientTape() as mrs_tape:
+            mrs, x_pred, z_mean, z_var = self.model(train_x)
             vae_loss = self.vae_loss_func(train_x, x_pred, z_mean, z_var)
-            seg_loss = self.seg_loss_func(train_seg, seg)
+            mrs_loss = self.mrs_loss_func(train_mrs, mrs) *0.01
         
         gradients_vae = vae_tape.gradient(vae_loss, self.model.trainable_variables)
         self.optimizer1.apply_gradients(zip(gradients_vae, self.model.trainable_variables))
-        gradients_seg = seg_tape.gradient(seg_loss, self.model.trainable_variables)
-        self.optimizer1.apply_gradients(zip(gradients_seg, self.model.trainable_variables))
+        gradients_mrs = mrs_tape.gradient(mrs_loss, self.model.trainable_variables)
+        self.optimizer2.apply_gradients(zip(gradients_mrs, self.model.trainable_variables))
 
         if validate:
-            val_seg_pred, val_x_pred, val_z_mean, val_z_var = self.model(val_x)
+            val_mrs_pred, val_x_pred, val_z_mean, val_z_var = self.model(val_x)
             val_vae_loss = self.vae_loss_func(val_x, val_x_pred, val_z_mean, val_z_var)
-            val_seg_loss = self.seg_loss_func(val_seg, val_seg_pred)
-            return [seg_loss, vae_loss, val_seg_loss, val_vae_loss], [val_x, val_seg, val_x_pred, val_seg_pred]
+            val_mrs_loss = self.mrs_loss_func(val_mrs, val_mrs_pred)
+            return [mrs_loss, vae_loss, val_mrs_loss, val_vae_loss], [val_x, val_mrs, val_x_pred, val_mrs_pred]
         else:
-            return [seg_loss, vae_loss]
+            return [mrs_loss, vae_loss]
 
     def train_step(self, datapipeline, batch_size=None, validate=True):
-        train_x, train_seg, val_x, val_seg= next(datapipeline)
+        train_x, train_mrs, val_x, val_mrs= next(datapipeline)
         if validate:
-            [seg_loss, vae_loss, val_seg_loss, val_vae_loss], val_output = self.__train_step__(train_x, train_seg, val_x, val_seg, validate=validate)
+            [mrs_loss, vae_loss, val_mrs_loss, val_vae_loss], val_output = self.__train_step__(train_x, train_mrs, val_x, val_mrs, validate=validate)
             history = {
-                "seg_loss":seg_loss,
+                "mrs_loss":mrs_loss,
                 "vae_loss":vae_loss,
-                "val_seg_loss": val_seg_loss,
+                "val_mrs_loss": val_mrs_loss,
                 "val_vae_loss": val_vae_loss
             }
             return history, val_output
         else:
-            seg_loss, vae_loss = self.__train_step__(train_x, train_seg, val_x, val_seg, validate=validate)
+            mrs_loss, vae_loss = self.__train_step__(train_x, train_mrs, val_x, val_mrs, validate=validate)
             history = {
-                "seg_loss":seg_loss,
+                "mrs_loss":mrs_loss,
                 "vae_loss":vae_loss,
             }
             return history
@@ -532,28 +537,28 @@ class VAE3Dseg:
                     history[k] = np.squeeze(history[k].numpy())
                     tf.summary.scalar(k, data=history[k], step=epoch)
             if epoch == 1:
-                loss_min = history["val_seg_loss"]
+                loss_min = history["val_mrs_loss"]
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
             else:
                 for key in summary.keys():
                     summary[key].append(history[key])
             
-            if history["seg_loss"] < loss_min:
-                loss_min = history["val_seg_loss"]
+            if history["mrs_loss"] < loss_min:
+                loss_min = history["val_mrs_loss"]
                 loss_min_epoch = epoch
                 if epoch > logstart:
                     self.model.save(os.path.join(logdir, "model_epoch_{}.h5".format(epoch)))
                     if logimage:
                         self.save_image(val_output, epoch, logdir, logimage, logslices=logslices)
 
-            print("Epoch -- {} -- CurrentBest -- {} -- val_seg_loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
+            print("Epoch -- {} -- CurrentBest -- {} -- val_mrs_loss -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
             print("   ".join(["{}: {:.4f}".format(k, v) for k, v in history.items()]))
         return summary
 
     def save_image(self, output, epoch, logdir=".", logimage=8, logslices=slice(None)):
         D,H,W,C = self.input_shape
-        seg_c = self.output_channels
+        mrs_c = self.output_channels
 
         def getArray(i):
             if isinstance(i, tf.Tensor):
@@ -569,11 +574,11 @@ class VAE3Dseg:
         #     '''
         #     return np.concat([image[:,:,i] for i in image.shape[-1]], axis = )
 
-        val_x, val_seg, val_x_pred, val_seg_pred = [getArray(i)[logslices] for i in output]
+        val_x, val_mrs, val_x_pred, val_mrs_pred = [getArray(i)[logslices] for i in output]
         val_x.dump(os.path.join(logdir, "val-x-{}.png".format(epoch)))
-        val_seg.dump(os.path.join(logdir, "val-seg-{}.png".format(epoch)))
+        val_mrs.dump(os.path.join(logdir, "val-mrs-{}.png".format(epoch)))
         val_x_pred.dump(os.path.join(logdir, "val-x-pred-{}.png".format(epoch)))
-        val_seg_pred.dump(os.path.join(logdir, "val-seg-pred-{}.png".format(epoch)))
+        val_mrs_pred.dump(os.path.join(logdir, "val-mrs-pred-{}.png".format(epoch)))
 
 
         # image = np.squeeze(output[0].numpy())[:logimage]
