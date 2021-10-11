@@ -11,6 +11,7 @@ from tensorflow.keras.layers import Dense, Conv3D, Conv1D, Conv3DTranspose, Flat
 from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow_addons.layers import InstanceNormalization
 from utils.layers import *
 import matplotlib.pyplot as plt
 from skimage.io import imsave

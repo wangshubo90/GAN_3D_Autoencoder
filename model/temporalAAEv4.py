@@ -65,6 +65,7 @@ class temporalAAEv4():
         x1, x2, x3 = [Lambda(lambda a: bk.reshape(a, (-1, seq_length, *a.shape[1:])))(x_) for x_ in [x1,x2,x3]]
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
         x3 = GCNfuncLayer(x3, adj, channel_out = x3.shape[-1]*2, seqToGraph=True, activation="relu")
+        x3 = GCNfuncLayer(x3, adj, channel_out = x3.shape[-1]*4, seqToGraph=False, activation="relu")
         # x3 = Dropout(0.2)(x3)
         x3 = GCNfuncLayer(x3, adj, channel_out = self.encoder.output_shape[-1][-1], seqToGraph=False, activation="relu")
         # x3 = GCNfuncLayer(input, input2, seqToGraph=False, activation="relu")
@@ -117,11 +118,11 @@ class temporalAAEv4():
     def train_step(self, train_set, val_set, validate=True):
         # x_idx_list = sample(range(train_set.shape[0]), batch_size)
         # x_idx_list2 = sample(range(train_set.shape[0]), batch_size)
-        x, y = next(train_set)
-        val_x, val_y = next(val_set)
+        x, y, adj = next(train_set)
+        val_x, val_y, val_adj = next(val_set)
 
         if validate:
-            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
+            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, adj, val_x, val_y, val_adj, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,
@@ -135,7 +136,7 @@ class temporalAAEv4():
             
             return history, val_output
         else:
-            ae_loss, ae_acc, d_loss, g_loss, total_loss = self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
+            ae_loss, ae_acc, d_loss, g_loss, total_loss = self.__train_step__(x, y, adj, val_x, val_y, val_adj, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,

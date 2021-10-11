@@ -118,7 +118,7 @@ asha_scheduler = AsyncHyperBandScheduler(
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAETF-noflatten-gf0.01-beta0.6-latest",
+    name="resAAETF-noflatten-gf0.01-beta0.6-instance-norm",
     metric="val_acc",
     mode="min",
     scheduler=asha_scheduler,
