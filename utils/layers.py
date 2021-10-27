@@ -4,9 +4,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import backend as bk
-from tensorflow.keras.layers import Conv3DTranspose, Conv3D, BatchNormalization, Activation, Add, LSTM, Lambda, concatenate
+from tensorflow.keras.layers import Conv3DTranspose, Conv3D, BatchNormalization, Activation, Add, LSTM, Lambda, concatenate, Dense
 from tensorflow.keras.activations import relu
-from tensorflow.python.keras.layers.convolutional import Conv1DTranspose
 
 def __default_conv3D(input, filters=8, kernel_size=3, strides=(1,1,1), weight_decay = 1e-4, **kwargs):
     '''
@@ -150,25 +149,107 @@ def spatialLSTM3D(input, mask, lstm_activation='tanh'):
     '''
         input shape: [batch, seq_step, depth, height, width, channel]
     '''
-    org_shape = bk.shape(input)
-    input = bk.reshape(input, shape=(org_shape[0], org_shape[1], org_shape[2]*org_shape[3]*org_shape[4], org_shape[-1])) # shape [batch, step, 3dflatten, channel]
-    new_shape = bk.shape(input)
-    lstmlayer1 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
-    lstmlayer2 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
-    lstmlayer3 = LSTM(org_shape[-1])
+    org_shape = bk.int_shape(input)
+    input = bk.reshape(input, shape=(-1, org_shape[1], org_shape[2]*org_shape[3]*org_shape[4], org_shape[-1])) # shape [batch, step, 3dflatten, channel]
+    new_shape = bk.int_shape(input)
+    # lstmlayer1 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
+    # lstmlayer2 = LSTM(org_shape[-1], activation=lstm_activation, return_sequences=True)
+    # lstmlayer3 = LSTM(org_shape[-1], activation='relu')
 
     spatialpath = []
     for i in range(new_shape[2]):
         x = Lambda(lambda z: z[:,:,i,:])(input)
-        x = lstmlayer1(x, mask=mask)
-        x = lstmlayer2(x, mask=mask)
-        x = lstmlayer3(x, mask=mask)   # x shape : [batch, channel]
+        # x = lstmlayer1(x, mask=mask)
+        # x = lstmlayer2(x, mask=mask)
+        x = LSTM(org_shape[-1], activation='sigmoid')(x, mask=mask)   # x shape : [batch, channel]
         x = tf.expand_dims(x, axis=1)
         spatialpath.append(x)
     x = concatenate(spatialpath, axis=1)
-    x = bk.reshape(x, shape=(org_shape[0], *org_shape[2:]))
+    x = bk.reshape(x, shape=(-1, *org_shape[2:]))
     return x
     
+class VASampling(tf.keras.layers.Layer):
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
+    def __init__(self, **kwargs):
+        super(VASampling, self).__init__(**kwargs)
+        self.n_batch = ""
+        self.n_dim = ""
+
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        batch = tf.shape(z_mean)[0]
+        dim = tf.shape(z_mean)[1]
+        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+    
+    def get_config(self):
+        # Implement get_config to enable serialization. This is optional.
+        base_config = super(VASampling, self).get_config()
+        config = {"initializer": keras.initializers.serialize(self.initializer)}
+        return dict(list(base_config.items()) + list(config.items()))
+
+class SimpleDense(tf.keras.layers.Layer):
+
+  def __init__(self, units=32):
+      super(SimpleDense, self).__init__()
+      self.units = units
+
+  def build(self, input_shape):
+      self.w = self.add_weight(shape=(input_shape[-1], self.units),
+                               initializer='random_normal',
+                               trainable=True)
+      self.b = self.add_weight(shape=(self.units,),
+                               initializer='random_normal',
+                               trainable=True)
+
+  def call(self, inputs):
+      return tf.matmul(inputs, self.w) + self.b
+
+class GCNLayer(tf.keras.layers.Layer):
+    def __init__(self, featureDimIn, featureDimOut, adjDim, dropout, feature_nnz=0, activation=tf.nn.relu, name="Graph_conv"):
+        super(GCNLayer, self).__init__(name)
+        self.featureDimIn = featureDimIn
+        self.featureDimOut = featureDimOut
+        self.adjDim = adjDim
+        self.dropout = dropout
+        self.act = activation
+        sefl.weightLayer = ""
+        with tf.variable_scope(self.name):
+            self.weights = glorot([input_dim, output_dim], name='weight')
+            self.vars = [self.weights]
+
+    def build(self, input_shape):
+        self.w = ""
+
+    def call(self, inputs):
+        x = inputs
+        x = sparse_dropout(x, 1 - self.dropout, self.feature_nnz) if self.sparse else tf.nn.dropout(x, 1 - self.dropout)
+        x = dot(x, self.weights, sparse=self.sparse)
+        x = dot(self.adj, x, sparse=True)
+        return self.act(x)
+
+def GCNfuncLayer(input, adj, channel_out, seqToGraph=True, use_bias=False, activation=None, **kwargs):
+    """
+    input_shape = [batch, seqence_len, ..., channel]
+    """
+    if seqToGraph:
+        rank = tf.rank(input)
+        axes = tf.range(rank)
+        permSeqToGraph = [axes[0],*axes[2:-1], axes[1], axes[-1]]
+        # permGraphToSeq = [axes[0],axes[-2], *axes[2:-1], axes[-1]]
+        x = tf.transpose(input, perm=permSeqToGraph)
+    else:
+        x = input
+    wx = Dense(channel_out, use_bias=use_bias, activation=None, **kwargs)(x)
+    # output = tf.tensordot(adj, wx, axes=[[2], [-2]])
+    output = tf.matmul(adj, wx)
+    if type(activation) == str:
+        act = tf.keras.activations.get(activation)
+    else:
+        act = activation
+    output = act(output)   
+
+    return output 
 
 if __name__=="__main__":
 

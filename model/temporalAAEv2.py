@@ -8,7 +8,7 @@ from tensorflow.keras import layers, Sequential, Model
 from tensorflow.keras import activations
 from tensorflow.keras import backend as bk
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking, SpatialDropout3D
+from tensorflow.keras.layers import Lambda, Input, BatchNormalization, ConvLSTM3D, Conv3D, Masking, SpatialDropout3D, Bidirectional
 from tensorflow.keras.activations import relu, sigmoid
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.optimizers import Adam, SGD
@@ -50,31 +50,34 @@ class temporalAAEv2():
         mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
         x = self.encoder(x, training=False)
-        x = SpatialDropout3D(0.3, data_format="channels_last")(x)
+        x = SpatialDropout3D(0, data_format="channels_last")(x)
         x = Lambda(lambda a: bk.reshape(a, (-1, seq_length, *self.encoder.output_shape[1:])))(x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
         for i in lstm_hidden_layers:
-            x = ConvLSTM3D(i,3,padding="same",activation="relu", return_sequences=True)(x, mask=mask)
+            x = ConvLSTM3D(i,3,padding="same",activation="tanh", return_sequences=True)(x, mask=mask)
+            # x = BatchNormalization()(x)
         x = ConvLSTM3D(self.encoder.output_shape[-1], 3, padding="same", activation="relu")(x, mask=mask)
+        x = BatchNormalization()(x)
+        # x = spatialLSTM3D(x, mask = mask, lstm_activation="tanh")
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
         x = self.decoder(x, training=False)
         model = Model(inputs=input, outputs=x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
         return model
 
-    @tf.function
+    # @tf.function
     def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
         input = x
         seqlength = x.shape[1]
         with tf.GradientTape() as ae_tape:
-            fake_image = self.temporalModel(x)
+            fake_image = self.temporalModel(x, training=True)
             fake_output = self.discriminator(fake_image, training=False)
 
             ae_loss = self.loss_function_AE(y, fake_image)
             g_loss = self.loss_function_GD(fake_output, tf.ones_like(fake_output))
             total_loss = ae_loss + g_loss*gfactor
             ae_acc = self.acc_function(y, fake_image)
-        
+        train_output=[fake_image, y]
         ae_grad = ae_tape.gradient(total_loss, self.temporalModel.trainable_variables)
         self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.temporalModel.trainable_variables))
         x = input
@@ -90,10 +93,10 @@ class temporalAAEv2():
         self.optimizer_discriminator.apply_gradients(zip(d_grad, self.discriminator.trainable_variables))
         
         if validate:
-            val_output = self.temporalModel(val_x, training = False)
+            val_output = self.temporalModel(val_x, training = True)
             val_loss = self.loss_function_AE(val_output, val_y)
             val_acc = self.acc_function(val_output, val_y)
-            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], [val_output, val_y]
+            return [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], [val_output, val_y], train_output
         else:
             return ae_loss, ae_acc, d_loss, g_loss, total_loss
 
@@ -104,7 +107,7 @@ class temporalAAEv2():
         val_x, val_y = next(val_set)
 
         if validate:
-            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output= self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
+            [ae_loss, ae_acc, d_loss, g_loss, val_loss, val_acc, total_loss], val_output, train_output= self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
             
             history = {
                         'AE_loss':ae_loss,
@@ -116,7 +119,7 @@ class temporalAAEv2():
                         "val_acc":val_acc
                     }
             
-            return history, val_output
+            return history, val_output, train_output
         else:
             ae_loss, ae_acc, d_loss, g_loss, total_loss = self.__train_step__(x, y, val_x, val_y, self.gfactor, validate=validate)
             
@@ -134,7 +137,7 @@ class temporalAAEv2():
         summary_writer = tf.summary.create_file_writer(logdir)
         summary_writer.set_as_default()
         for epoch in np.arange(1, n_epochs):
-            history, val_output = self.train_step(train_set, val_set)
+            history, val_output, train_output = self.train_step(train_set, val_set)
             with summary_writer.as_default():
                 for k, v in history.items():
                     tf.summary.scalar(k, data=v, step=epoch)
@@ -143,12 +146,13 @@ class temporalAAEv2():
                 loss_min_epoch = 1
                 summary = {k:[] for k in history.keys()}
             
-            if epoch > logstart and history["val_acc"] < loss_min:
+            if epoch > logstart and bool(epoch % 50 == 0 or history["val_acc"] < loss_min):
                 loss_min = min(history["val_acc"], loss_min)
                 loss_min_epoch = epoch
                 self.temporalModel.save_weights(os.path.join(logdir, "tAAE_epoch_{}.h5".format(epoch)))
                 if logimage:
-                    self.save_image(val_output, epoch, logdir, logimage, slices)
+                    self.save_image(val_output, epoch, logdir=logdir, img_name="val-image", logimage=logimage, slices = slices)
+                    self.save_image(train_output, epoch, logdir=logdir, img_name="train-image", logimage=logimage, slices = slices)
                 #self.discriminator.save("../GAN_log/discriminator_epoch_{}.h5".format(epoch))
             
             print("Epoch -- {} -- CurrentBest -- {} -- val-acc -- {:.4f}".format(epoch, loss_min_epoch, loss_min))
@@ -165,7 +169,7 @@ class temporalAAEv2():
     def __tsbd_log__(self, writer, metrics, image=None):
         pass
     
-    def save_image(self, output, epoch, logdir=".", logimage=8, slices=None):
+    def save_image(self, output, epoch, logdir=".", img_name="val-image", logimage=8, slices=None):
         image = np.squeeze(output[0].numpy())[:logimage]
         valimage = np.squeeze(output[1])[:logimage]
         shape = image.shape
@@ -180,7 +184,7 @@ class temporalAAEv2():
         fig = plt.figure()
         plt.imshow(image, cmap="gray")
         plt.axis("off")
-        plt.savefig(os.path.join(logdir, "val-image-{}.png".format(epoch)), dpi=300)
+        plt.savefig(os.path.join(logdir, "{}-{}.png".format(img_name, epoch)), dpi=300)
         plt.close()
 
     def load_model(self):
