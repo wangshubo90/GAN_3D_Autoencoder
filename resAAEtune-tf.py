@@ -51,6 +51,8 @@ class AAETrainable(tune.Trainable):
         config["hidden_D"] = config["hidden"]
         #===============set up model================
         self.model = resAAE(**config)
+        self.gfactor=config["g_loss_factor"]
+        self.model.gfactor = 0.00000001
         self.train_set=data["train"]
         self.val_set=data["val"]
         self.batch_size=batch_size
@@ -68,7 +70,7 @@ class AAETrainable(tune.Trainable):
             self.currentIsBest = False
 
         if self.iteration > 10000:
-            self.model.gfactor = 0.01
+            self.model.gfactor = self.gfactor
         history = {k:v.numpy() for k, v in history.items()}
         return history
 
@@ -90,16 +92,17 @@ class AAETrainable(tune.Trainable):
 
 #===============set up dataset================
 
-datapath = r'..\data\ct\Data'
+# datapath = r'..\data\ct\Data'
+datapath = r"./data/udelCT/"
 # file_reference = r'./data/udelCT/File_reference.csv'
 train_set = np.load(open(os.path.join(datapath, "trainset.npy"), "rb"))
 val_set = np.load(open(os.path.join(datapath, "valset.npy"), "rb"))
 
 def stopper(trial_id, result):
     conditions = [
-        result["AE_loss"]  < 0.001, 
-        result["AE_loss"]  > 1 and result["training_iteration"] > 250 ,
-        result["AE_loss"]  > 0.2 and result["training_iteration"] > 500 ,
+        result["val_acc"]  < 0.001, 
+        result["val_acc"]  > 1 and result["training_iteration"] > 250 ,
+        result["val_acc"]  > 0.2 and result["training_iteration"] > 500 ,
     ]
     return reduce(lambda x,y: x or y, conditions)
 
@@ -109,18 +112,18 @@ class MyCallback(Callback):
 
 asha_scheduler = AsyncHyperBandScheduler(
     time_attr='training_iteration',
-    max_t=25000,
-    grace_period=25000,
+    max_t=40000,
+    grace_period=40000,
     reduction_factor=3,
     brackets=1)
 
 analysis = tune.run(
     tune.with_parameters(AAETrainable, batch_size=16, epochs=5000, data={"train":train_set, "val":val_set}),
-    name="resAAETF-noflatten-gf0.01-beta0.6",
+    name="resAAETF-noflatten-latestv2-0.1Gaussian",
     metric="val_acc",
     mode="min",
     scheduler=asha_scheduler,
-    local_dir=r"..\data\ray_results",
+    local_dir=r"./data/ray_results",
     verbose=1,
     num_samples=1,
     resources_per_trial={
@@ -129,15 +132,15 @@ analysis = tune.run(
     },
     stop=stopper, 
     config = {
-        "g_loss_factor":0.00000001,
-        "hidden": grid_search([(8,8,16,16),(8,16,16,32),(8,16,32,64)]),
+        "g_loss_factor": 0.001,
+        "hidden": grid_search([(8,8,16,16), (8,16,16,32), (8,16,32,64)]),
         "hidden_D":(8, 16, 16, 32),
         "optAE_lr" : 0.001, 
         "optAE_beta" : 0.9,
         "optD_lr" : PiecewiseConstantDecay(boundaries = [10000,], values = [0.00000001, 0.0001]), 
         "optD_beta" : 0.9,
         "img_shape": (48, 96, 96, 1), 
-        "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.5, mode="add"), 
+        "loss_AE": mixedMSE(filter=gaussianFilter3D(sigma=1, kernel_size=3), alpha=0.1, mode="add"), 
         "loss_GD": BinaryCrossentropy(from_logits=False),
         "last_decoder_act": relu,
         "acc": MeanSquaredError(),
