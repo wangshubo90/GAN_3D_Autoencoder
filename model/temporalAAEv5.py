@@ -18,7 +18,7 @@ from utils.mask import compute_mask
 from model.resAAETF import resAAE
 import matplotlib.pyplot as plt
 
-class temporalAAEv2():
+class temporalAAEv5():
     #Adversarial Autoencoder
     def __init__(self, 
                 AAE_config="",
@@ -36,20 +36,22 @@ class temporalAAEv2():
         self.encoder = self.AAE.encoder
         self.decoder = self.AAE.decoder
         self.discriminator = self.AAE.discriminator
-        self.temporalModel = self._buildTemporal(self.lstm_layers, seq_length=4)
+        self.temporalModel, self.aeModel = self._buildModels(self.lstm_layers, seq_length=4)
         self.loss_function_AE = self.AAE.loss_function_AE
         self.loss_function_GD = self.AAE.loss_function_GD
+        self.loss_function_temporal = loss_function_temporal
         self.acc_function = self.AAE.acc_function
         self.gfactor=self.AAE.gfactor
         self.optimizer_autoencoder = self.AAE.optimizer_autoencoder
         self.optimizer_discriminator = self.AAE.optimizer_discriminator
 
-    def _buildTemporal(self,lstm_hidden_layers=[32,32], seq_length=4):
+    def _buildModels(self,lstm_hidden_layers=[32,32], seq_length=4):
 
         input = Input(shape=(seq_length, *self.AAE.img_shape), dtype=tf.float32)
         mask = compute_mask(input, mask_value=0.0, reduce_axes=[2,3,4,5], keepdims=False)
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.AAE.img_shape)))(input)
-        x = self.encoder(x, training=False)
+        x = self.encoder(x, training=True)
+        x2 = self.decoder(x, training=True)
         x = SpatialDropout3D(0, data_format="channels_last")(x)
         x = Lambda(lambda a: bk.reshape(a, (-1, seq_length, *self.encoder.output_shape[1:])))(x)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (1, -1, *self.encoder.output_shape[1:]) )))
@@ -61,30 +63,35 @@ class temporalAAEv2():
         # x = spatialLSTM3D(x, mask = mask, lstm_activation="tanh")
         x = Lambda(lambda a: bk.reshape(a, (-1, *self.decoder.input_shape[1:])))(x)
         x = self.decoder(x, training=False)
-        model = Model(inputs=input, outputs=x)
+        temporalModel = Model(inputs=input, outputs=x)
+        aeModel = Model(inputs=input, outputs=x2)
         # model.add(Lambda(lambda x: keras.backend.reshape(x, shape = (-1, *self.encoder.output_shape[1:]) )))
-        return model
-
-    def _build
+        return temporalModel, aeModel
 
     # @tf.function
     def __train_step__(self, x, y, val_x, val_y,  gfactor, validate=True):
         input = x
         seqlength = x.shape[1]
         with tf.GradientTape() as ae_tape:
-            fake_image = self.temporalModel(x, training=True)
+            fake_image_temporal = self.temporalModel(x, training=True)
+            fake_image_ae = self.aeModel(x, training=True)
+            fake_image = tf.concat([fake_image_temporal, fake_image_ae], axis=0)
+            y_x = tf.concat([y, x], axis=0)
             fake_output = self.discriminator(fake_image, training=False)
-
-            ae_loss = self.loss_function_AE(y, fake_image)
+            ae_loss = self.loss_function_AE(x, fake_image_ae)
+            temporal_loss = self.loss_function_temporal(y, fake_image_temporal)
             g_loss = self.loss_function_GD(fake_output, tf.ones_like(fake_output))
-            total_loss = ae_loss + g_loss*gfactor
-            ae_acc = self.acc_function(y, fake_image)
-        train_output=[fake_image, y]
+            total_loss = ae_loss + temporal_loss + g_loss * gfactor
+            ae_acc = self.acc_function(x, fake_image_ae)
+            temporal_acc = self.acc_function(y, fake_image_temporal)
+        train_output=[fake_image, y_x]
         ae_grad = ae_tape.gradient(total_loss, self.temporalModel.trainable_variables)
         self.optimizer_autoencoder.apply_gradients(zip(ae_grad, self.temporalModel.trainable_variables))
         x = input
         with tf.GradientTape() as disc_tape:
-            fake_image = self.temporalModel(x, training=False)
+            fake_image_temporal = self.temporalModel(x, training=False)
+            fake_image_ae = self.aeModel(x, training=False)
+            fake_image = tf.concat([fake_image_temporal, fake_image_ae], axis=0)
             fake_output = self.discriminator(fake_image, training=True)
             real_output = self.discriminator(y, training=True)
 
