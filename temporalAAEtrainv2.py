@@ -1,4 +1,3 @@
-from tensorflow.python.ops.gen_math_ops import AddN
 from model.temporalAAEv2 import temporalAAEv2
 import os, glob, json, pickle
 #================ Environment variables ================

@@ -61,6 +61,64 @@ class mixedMSE():
         
         
         return loss
+
+def cDice(y_true, y_pred):
+    by = tf.cast(tf.where(y_true>0, 1, 0), tf.float32)
+    intersect = tf.reduce_sum(by*y_pred)
+    if intersect >0:
+        c = tf.reduce_sum(by*y_pred)/tf.reduce_sum(tf.cast(tf.where(y_pred>0,1,0), tf.float32)*by)
+    else:
+        c = 1
+    cdice = 2*intersect / (c*tf.reduce_sum(y_pred)+tf.reduce_sum(by))
+    return cdice
+
+class mixedDiceMSE():
+    def __init__(self, filter, mode="add", alpha=0.001, **kwargs):
+        self.filter = filter
+        self.alpha = alpha
+        self.kwargs = kwargs
+        self.mode = mode
+        
+    def cDice(self, y_true, y_pred):
+        # by = tf.cast(tf.where(y_true>0, 1, 0), tf.float32)
+        by = y_true
+        intersect = tf.reduce_sum(by*y_pred)
+        # if intersect >0:
+        #     c = tf.reduce_sum(by*y_pred)/tf.reduce_sum(tf.cast(tf.where(y_pred>0,1,0), tf.float32)*by)
+        # else:
+        #     c = 1
+        cdice = 2*intersect / (tf.reduce_sum(y_pred**2)+tf.reduce_sum(by**2))
+        return cdice
+        
+    def __call__(self, y_true, y_pred):
+        tobemix = 1 - self.cDice(y_true, y_pred)
+        mse = keras.losses.mse(y_true, y_pred)
+        if self.mode=="add":
+            loss = tf.reduce_mean(self.alpha * tobemix + mse)
+        elif self.mode=="blend":
+            loss = tf.reduce_mean(self.alpha * tobemix + (1-self.alpha)*mse)
+        return loss
+
+class focalSoftDice():
+    def __init__(self, filter, mode="add", alpha=0.001, **kwargs):
+        self.filter = filter
+        self.alpha = alpha
+        self.kwargs = kwargs
+        self.mode = mode
+
+    def __call__(self, y_true, y_pred):
+        y_true_filtered = self.filter(y_true, **self.kwargs)
+        dice = 2 * tf.reduce_sum(y_true_filtered*y_pred) / tf.reduce_sum(y_true_filtered+y_pred)
+
+        tobemix = keras.losses.mse(self.filter(y_true, **self.kwargs), self.filter(y_pred, **self.kwargs))
+        mse = keras.losses.mse(y_true, y_pred)
+        if self.mode=="add":
+            loss = tf.reduce_mean(self.alpha * tobemix + mse)
+        elif self.mode=="blend":
+            loss = tf.reduce_mean(self.alpha * tobemix + (1-self.alpha)*mse)
+        
+        
+        return loss
     
 if __name__=="__main__":
     
